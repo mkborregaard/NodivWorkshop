@@ -1319,9 +1319,11 @@ version = "1.13.0"
 
 [[deps.SpatialEcology]]
 deps = ["DataFrames", "DataFramesMeta", "Distances", "EcoBase", "Random", "RandomBooleanMatrices", "RandomNumbers", "RecipesBase", "SparseArrays", "Statistics", "StatsBase"]
-path = "/Users/cvg147/.julia/dev/SpatialEcology"
+git-tree-sha1 = "735e7870c5896b4683c1c2ec742721ad832534ea"
+repo-rev = "main"
+repo-url = "https://github.com/EcoJulia/SpatialEcology.jl"
 uuid = "348f2d5d-71a3-5ad4-b565-8af070f99681"
-version = "0.9.17"
+version = "0.9.18"
 
 [[deps.SpecialFunctions]]
 deps = ["IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
