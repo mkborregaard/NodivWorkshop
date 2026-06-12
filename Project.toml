@@ -1,0 +1,17 @@
+[deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+GLM = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+LogExpFunctions = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
+MultivariateStats = "6f286f6a-111f-5878-ab1e-185364afe411"
+Nodiv = "6a6d1b09-ff88-4671-a19a-d516f2482c79"
+Phylo = "aea672f4-3940-5932-aa44-993d1c3ff149"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Shapefile = "8e980c4a-a4fe-5da2-b3a7-4b4b0353a2f4"
+SpatialEcology = "348f2d5d-71a3-5ad4-b565-8af070f99681"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[sources]
+Nodiv = {path = "/Users/cvg147/.julia/dev/Nodiv"}
+SpatialEcology = {path = "/Users/cvg147/.julia/dev/SpatialEcology"}

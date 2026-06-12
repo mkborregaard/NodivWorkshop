@@ -1,0 +1,8 @@
+# data files are kept local, not pushed
+data/
+
+# editor / OS / R cruft
+.DS_Store
+.Rproj.user/
+.Rhistory
+.Rapp.history
