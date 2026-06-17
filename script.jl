@@ -1,85 +1,36 @@
-# Node-based analysis of bird diversity, run in parallel in two spaces:
-#   birds_e - environmental (PC1/PC2) space  (PAM_E + Env.csv)
-#   birds_g - geographic space               (PAM_G + g_space shapefile)
-# Reusable, general steps live in the Nodiv package; everything dataset-specific
-# (file layout, taxonomy crosswalk, coordinate building) stays in this script.
+# Node-based analysis of bird diversity, in environmental (birds_e) and geographic
+# (birds_g) space. Run preprocess.jl first to build the cleaned inputs in
+# data/clean/; this script loads them, builds the assemblages, computes and caches
+# the node analysis, and explores the results.
 
-using CSV, DataFrames, SpatialEcology, Phylo, Plots, Shapefile
-using MultivariateStats, Statistics, JLD2, LogExpFunctions
+using CSV, DataFrames, SpatialEcology, Phylo, Plots
+using MultivariateStats, Statistics, JLD2, LogExpFunctions, GLM
 using Nodiv
 
 default(color = cgrad(:Spectral, rev = true))
 
-### Dataset-specific helpers ---------------------------------------------------
+### Load the cleaned inputs (from preprocess.jl) and build the assemblages -----
 
-# Cross.csv maps the PAM/BirdLife taxonomy (Species1) to the tree/BirdTree
-# taxonomy (Species3); relabel PAM species to the tree names so the datasets
-# share as many taxa as possible.
-cross = CSV.read("data/Cross.csv", DataFrame)
-namemap = Dict(string(r.Species1) => replace(string(r.Species3), " " => "_")
-               for r in eachrow(cross) if !ismissing(r.Species1) && !ismissing(r.Species3))
+tree = load("data/clean/tree.jld2", "tree")
+strsite!(df) = (df.site = string.(df.site); df)   # site ids stay strings after CSV
+phylocom_e  = strsite!(CSV.read("data/clean/phylocom_e.csv", DataFrame))
+coords_e    = strsite!(CSV.read("data/clean/coords_e.csv", DataFrame))
+sitestats_e = CSV.read("data/clean/sitestats_e.csv", DataFrame)
+phylocom_g  = strsite!(CSV.read("data/clean/phylocom_g.csv", DataFrame))
+coords_g    = strsite!(CSV.read("data/clean/coords_g.csv", DataFrame))
+sitestats_g = CSV.read("data/clean/sitestats_g.csv", DataFrame)
+sitestats_g.ID_geo = string.(sitestats_g.ID_geo)
 
-# read a Newick tree, stripping numeric internal (support) labels that Phylo
-# rejects as duplicate node names
-readtree(path) = parsenewick(replace(read(path, String), r"\)[0-9.]+" => ")"))
-
-# build an Assemblage from long-format occurrences + a (site, x, y) coordinate
-# lookup: relabel species to the tree taxonomy, and align the coordinates to the
-# matrix's sites (SpatialEcology matches by row order, not by name).
-function build_assemblage(species_raw, sitevals, coords)
-    species = [get(namemap, s, replace(s, " " => "_")) for s in species_raw]
-    pc = DataFrame(site = string.(sitevals), abundance = 1, species = species)
-    sites = unique(pc.site)
-    idx = indexin(sites, string.(coords.site))
-    Assemblage(pc, DataFrame(site = sites, x = coords.x[idx], y = coords.y[idx]))
-end
-
-### Environmental-space assemblage ---------------------------------------------
-
-env = CSV.read("data/Env.csv", DataFrame)
-pam_e = CSV.read("data/PAM_E.csv", DataFrame)
-# env-space coordinates: each cell's PC bin midpoint
-coords_e = DataFrame(site = string.(env.ID_env),
-                     x = (env.xmin .+ env.xmax) ./ 2,
-                     y = (env.ymin .+ env.ymax) ./ 2)
-birds_e = build_assemblage(pam_e.Species, pam_e.ID_env, coords_e)
-addsitestats!(birds_e, env, :ID_env)        # attach PC bins, area, occupancy, ...
+# coordinates were pre-aligned to each phylocom's site order in preprocessing, so
+# they slot straight into the Assemblage (SpatialEcology aligns coords by row order).
+birds_e = Assemblage(phylocom_e, coords_e)
+addsitestats!(birds_e, sitestats_e, :ID_env)   # PC bins, area, occupancy, ...
 plot(birds_e)
 
-### Geographic-space assemblage ------------------------------------------------
-
-shp = Shapefile.Table(joinpath("data", "g_space", "BehrmannMeterGrid_WGS84_land_PCA_30.shp"))
-centroid(g) = (ex = extrema(p.x for p in g.points); ey = extrema(p.y for p in g.points);
-               ((ex[1] + ex[2]) / 2, (ey[1] + ey[2]) / 2))
-cents = centroid.(Shapefile.shapes(shp))
-# These are Behrmann equal-area cells; recover that grid by ranking longitude into
-# columns and sin(latitude) into rows. The sin-latitude axis is scaled by
-# 1/(dlon * cos^2(30 deg)) relative to the 1-degree longitude columns (Behrmann
-# standard parallel = 30 deg) so the cells come out square, then rounded to the cell
-# resolution and dense-ranked to contiguous integer indices (Float, since
-# SpatialEcology's grid indexing needs float coords). Binning at the cell resolution
-# absorbs the sub-degree reprojection skew so each band groups cleanly into one row.
-gridindex(v) = (u = sort(unique(v)); pos = Dict(u .=> eachindex(u)); Float64[pos[x] for x in v])
-behrmann = 1 / (deg2rad(1) * cosd(30)^2)   # ~76.4: sin-lat scale for square cells
-# the -0.5 shifts the bin phase so bands sit at bin centres rather than on round()
-# boundaries (the equatorial bands otherwise land exactly on a boundary and split
-# across two rows, leaving a sparse white line at the equator).
-coords_g = DataFrame(site = string.(shp.ID_geo),
-                     x = gridindex(round.(Int, first.(cents))),
-                     y = gridindex(round.(Int, sin.(deg2rad.(last.(cents))) .* behrmann .- 0.5)))
-geo_attrs = select(DataFrame(shp), Not(:geometry))
-geo_attrs.ID_geo = string.(geo_attrs.ID_geo)
-
-pam_g = CSV.read("data/PAM_G.csv", DataFrame)
-birds_g = build_assemblage(pam_g.Species, pam_g.ID_geo, coords_g)
-addsitestats!(birds_g, geo_attrs, :ID_geo)  # attach CHELSA bioclim, PC1-3, area, ...
+birds_g = Assemblage(phylocom_g, coords_g)
+addsitestats!(birds_g, sitestats_g, :ID_geo)   # CHELSA bioclim, PC1-3, area, ...
 plot(birds_g)
 
-### Shared phylogeny -----------------------------------------------------------
-
-tree = readtree("data/birds.nwk")
-prune_to_shared!(tree, birds_e, birds_g)    # keep only taxa present in both
-sort!(tree)
 
 ### Heavy step: GND + SOS for every node, both spaces, cached to disk ----------
 # `node_analysis` computes GND and the per-cell SOS together (SOS is needed for
@@ -124,22 +75,29 @@ function sos_mds_plot(res, nodes, title)
             series_annotations = text.(nodes, 6, :bottom),
             xlabel = "MDS axis 1", ylabel = "MDS axis 2", title = title)
 end
-sos_mds_plot(res_e, divergent_e, "SOS-pattern similarity (environmental)")
-sos_mds_plot(res_g, divergent_g, "SOS-pattern similarity (geographic)")
+sos_mds_plot(res_e, divergent, "SOS-pattern similarity (environmental)")
+sos_mds_plot(res_g, divergent, "SOS-pattern similarity (geographic)")
 
-focal = "Node 531"
+focal = "Node 10531"
 plot_node(birds_e, tree, focal, res_e)
 plot_node(birds_g, tree, focal, res_g)
 
 same = divergent_e ∩ divergent_g
 
 nodes = collect(keys(res_e.gnd))
-scatter([logit(res_g.gnd[n]) for n in nodes], [logit(res_e.gnd[n]) for n in nodes],
+dat = DataFrame(
+    :logit_g => [logit(res_g.gnd[n]) for n in nodes],
+    :logit_e => [logit(res_e.gnd[n]) for n in nodes]
+)
+dat = filter(row -> all(x -> !ismissing(x) && isfinite(x), row), dat)
+
+scatter(dat.logit_g, dat.logit_e,
         xlabel = "geo GND", ylabel = "env GND", label = "")
 
-allnodes = collect(keys(res_e.gnd))
-sizes = Dict(node => noccupied(get_clade(birds_e, tree, node)) for node in allnodes)
+mod = lm(@formula(logit_e ~ logit_g), dat)
 
+
+sizes = Dict(node => noccupied(get_clade(birds_e, tree, node)) for node in nodes)
 histogram(collect(values(sizes)))
 
 plot(tree, treetype = :fan, marker_z = sizes, showtips = false, msw = 0)
