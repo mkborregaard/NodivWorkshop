@@ -5,7 +5,7 @@
 #     sitestats_e/g.csv                       and site covariates (e = env, g = geo)
 # Run this once (or whenever the raw data changes); it is the slow I/O step.
 
-using CSV, DataFrames, Shapefile, Phylo, JLD2
+using CSV, DataFrames, Shapefile, Phylo, RCall
 
 # Cross.csv maps the PAM/BirdLife taxonomy (Species1) to the tree/BirdTree
 # taxonomy (Species3); relabel PAM species to the tree names so the datasets
@@ -69,4 +69,9 @@ CSV.write("data/clean/sitestats_e.csv", sitestats_e)
 CSV.write("data/clean/phylocom_g.csv", phylocom_g)
 CSV.write("data/clean/coords_g.csv", coords_g)
 CSV.write("data/clean/sitestats_g.csv", sitestats_g)
-jldsave("data/clean/tree.jld2"; tree)
+# write the tree as Newick via R's ape::write.tree (Phylo has no Newick writer).
+# ape drops internal node labels, so re-reading renumbers internal nodes - fine
+# here, the labels are just auto-generated "Node N" placeholders anyway.
+treefile = "data/clean/tree.nwk"
+R"suppressMessages(library(ape))"
+R"write.tree($tree, file = $treefile)"

@@ -11,7 +11,7 @@ default(color = cgrad(:Spectral, rev = true))
 
 ### Load the cleaned inputs (from preprocess.jl) and build the assemblages -----
 
-tree = load("data/clean/tree.jld2", "tree")
+tree = parsenewick(read("data/clean/tree.nwk", String))
 strsite!(df) = (df.site = string.(df.site); df)   # site ids stay strings after CSV
 phylocom_e  = strsite!(CSV.read("data/clean/phylocom_e.csv", DataFrame))
 coords_e    = strsite!(CSV.read("data/clean/coords_e.csv", DataFrame))
