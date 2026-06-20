@@ -1,4 +1,5 @@
 # Node-based analysis of bird diversity, in environmental (birds_e) and geographic
+
 # (birds_g) space. Run preprocess.jl first to build the cleaned inputs in
 # data/clean/; this script loads them, builds the assemblages, computes and caches
 # the node analysis, and explores the results.
@@ -39,17 +40,19 @@ plot(birds_g)
 # reloads the results and jumps straight to the plotting below.
 cachefile = "data/node_analysis.jld2"
 if !isfile(cachefile)
-    res_e = node_analysis(birds_e, tree)
-    res_g = node_analysis(birds_g, tree)
+    res_e = node_metrics(birds_e, tree; nsims = 200)
+    res_g = node_metrics(birds_g, tree; nsims = 200)
     jldsave(cachefile; res_e, res_g)
 end
-res_e, res_g = load(cachefile, "res_e", "res_g")   # each a NodeAnalysis (gnd + sos)
+res_e, res_g = load(cachefile, "res_e", "res_g")   # each a NodeMetrics (gnd/rms/spatial/ses/pval + sos)
 
-### ---- Exploratory plotting (from the cached NodeAnalysis; `_e` vs `_g`) ----- ###
+### ---- Exploratory plotting (from the cached NodeMetrics; `_e` vs `_g`) ----- ###
 
-# strongly divergent nodes in each space
-divergent_e = divergent_nodes(res_e; threshold = 0.8)
-divergent_g = divergent_nodes(res_g; threshold = 0.8)
+# strongly divergent nodes in each space. by = :gnd keeps the original GND > 0.8
+# selection; switch to the default (RMS-SOS > 1.5) or by = :pval to use the
+# effect-size / null-calibrated scores instead.
+divergent_e = divergent_nodes(res_e; by = :gnd, threshold = 0.8)
+divergent_g = divergent_nodes(res_g; by = :gnd, threshold = 0.8)
 divergent = divergent_e ∩ divergent_g
 
 # GND of just the divergent nodes mapped onto the tree (plot_gnd marks every node
