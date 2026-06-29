@@ -32,7 +32,6 @@ birds_g = Assemblage(phylocom_g, coords_g)
 addsitestats!(birds_g, sitestats_g, :ID_geo)   # CHELSA bioclim, PC1-3, area, ...
 plot(birds_g)
 
-
 ### Heavy step: GND + SOS for every node, both spaces, cached to disk ----------
 # `node_analysis` computes GND and the per-cell SOS together (SOS is needed for
 # GND anyway). This is the slow part - randomisations over the whole tree, and
@@ -46,24 +45,28 @@ if !isfile(cachefile)
 end
 res_e, res_g = load(cachefile, "res_e", "res_g")   # each a NodeMetrics (gnd/rms/spatial/ses/pval + sos)
 
+metric = :rms # alternatives are :pval, :gnd and :ses
+e_metric = getfield(res_e, metric)
+g_metric = getfield(res_g, metric)
+
 ### ---- Exploratory plotting (from the cached NodeMetrics; `_e` vs `_g`) ----- ###
 
 # strongly divergent nodes in each space. by = :gnd keeps the original GND > 0.8
 # selection; switch to the default (RMS-SOS > 1.5) or by = :pval to use the
 # effect-size / null-calibrated scores instead.
-divergent_e = divergent_nodes(res_e; by = :gnd, threshold = 0.8)
-divergent_g = divergent_nodes(res_g; by = :gnd, threshold = 0.8)
+divergent_e = divergent_nodes(res_e; by = metric, threshold = 2)
+divergent_g = divergent_nodes(res_g; by = metric, threshold = 2)
 divergent = divergent_e ∩ divergent_g
 
 # GND of just the divergent nodes mapped onto the tree (plot_gnd marks every node
 # in the Dict it is given, so pass the divergent subset rather than the full result)
-plot_gnd(tree, Dict(n => res_e.gnd[n] for n in divergent_e))
-plot_gnd(tree, Dict(n => res_g.gnd[n] for n in divergent_g))
+plot_gnd(tree, Dict(n => e_metric[n] for n in divergent_e))
+plot_gnd(tree, Dict(n => g_metric[n] for n in divergent_g))
 
 # SOS of the most divergent node mapped onto each space (cached SOS, no recompute)
-focal_e = argmax(n -> res_e.gnd[n], divergent_e)
+focal_e = argmax(n -> e_metric[n], divergent_e)
 plot(res_e.sos[focal_e], birds_e, fillcolor = :RdYlBu, clim = (-8, 8), title = "env SOS - $focal_e")
-focal_g = argmax(n -> res_g.gnd[n], divergent_g)
+focal_g = argmax(n -> g_metric[n], divergent_g)
 plot(res_g.sos[focal_g], birds_g, fillcolor = :RdYlBu, clim = (-8, 8), title = "geo SOS - $focal_g")
 
 # parent/SOS/children panel for that node (4th arg = cached SOS, no recompute)
@@ -81,21 +84,21 @@ end
 sos_mds_plot(res_e, divergent, "SOS-pattern similarity (environmental)")
 sos_mds_plot(res_g, divergent, "SOS-pattern similarity (geographic)")
 
-focal = "Node 10531"
+focal = "Node 17672"
 plot_node(birds_e, tree, focal, res_e)
 plot_node(birds_g, tree, focal, res_g)
 
 same = divergent_e ∩ divergent_g
 
-nodes = collect(keys(res_e.gnd))
+nodes = collect(keys(e_metric))
 dat = DataFrame(
-    :logit_g => [logit(res_g.gnd[n]) for n in nodes],
-    :logit_e => [logit(res_e.gnd[n]) for n in nodes]
+    :logit_g => [log(g_metric[n]) for n in nodes], #NB logit or log, depends on metric
+    :logit_e => [log(e_metric[n]) for n in nodes]
 )
 dat = filter(row -> all(x -> !ismissing(x) && isfinite(x), row), dat)
 
 scatter(dat.logit_g, dat.logit_e,
-        xlabel = "geo GND", ylabel = "env GND", label = "")
+        xlabel = "geo $metric", ylabel = "env $metric", label = "")
 
 mod = lm(@formula(logit_e ~ logit_g), dat)
 
@@ -105,7 +108,14 @@ histogram(collect(values(sizes)))
 
 plot(tree, treetype = :fan, marker_z = sizes, showtips = false, msw = 0)
 
-scatter([sizes[n] for n in nodes], [res_e.gnd[n] for n in nodes],
-        xlabel = "occupied env sites", ylabel = "env GND", label = "")
+scatter([sizes[n] for n in nodes], [e_metric[n] for n in nodes],
+        xlabel = "occupied env sites", ylabel = "env $metric", label = "")
+
+
+nodesizes = Dict(node => nspecies(get_clade(birds_g, tree, node)) for node in nodes)
+scatter([log(nodesizes[n]) for n in nodes], [g_metric[n] for n in nodes],
+        xlabel = "number of species in clade", ylabel = "geo $metric", label = "")
+
+
 
 plot!([-2, 4], [-2, 4], c = :red, label = "")
