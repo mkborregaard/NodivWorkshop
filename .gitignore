@@ -1,6 +1,8 @@
-# data files and output figures are kept local (in Google Drive), not pushed
-data/
-figures/
+# data files and output figures are kept local (in Google Drive), not pushed.
+# No trailing slash: these are symlinks to the Drive folder here, and a "dir/"
+# pattern would not match a symlink (git treats it as a file).
+data
+figures
 
 # editor / OS / R cruft
 .DS_Store
