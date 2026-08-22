@@ -1,5 +1,6 @@
-# data files are kept local, not pushed
+# data files and output figures are kept local (in Google Drive), not pushed
 data/
+figures/
 
 # editor / OS / R cruft
 .DS_Store
