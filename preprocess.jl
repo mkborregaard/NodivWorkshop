@@ -1,6 +1,6 @@
 # Preprocessing for the Nodiv bird analysis. Reads the matched raw data from
 # data/data_birds_matched_simplified.rds (an R list: phylogeny, e_space, g_space,
-# traits) and writes cleaned inputs to data/clean_new/ that `script.jl` then loads:
+# traits) and writes cleaned inputs to data/clean/ that `script.jl` then loads:
 #   - tree.nwk                                the pruned phylogeny
 #   - phylocom_e/g.csv, coords_e/g.csv,       per-space occurrences, coordinates,
 #     sitestats_e/g.csv                       and site covariates (e = env, g = geo)
@@ -11,7 +11,7 @@
 using CSV, DataFrames, Phylo, RCall
 
 rdsfile = "data/data_birds_matched_simplified.rds"
-outdir = "data/clean_new"
+outdir = "data/clean"
 
 # The species names are already matched across tree, presences and traits in the
 # RDS; only swap spaces for underscores, as Newick tip labels need.
