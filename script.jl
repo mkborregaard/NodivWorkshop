@@ -21,7 +21,7 @@ set_theme!(colormap = Reverse(:Spectral))
 
 ### Load the cleaned inputs (from preprocess.jl) and build the assemblages -----
 
-tree = parsenewick(read("data/clean/tree.nwk", String))
+tree = sort!(parsenewick(read("data/clean/tree.nwk", String)))
 phylocom_e  = strsite!(CSV.read("data/clean/phylocom_e.csv", DataFrame))
 coords_e    = strsite!(CSV.read("data/clean/coords_e.csv", DataFrame))
 sitestats_e = CSV.read("data/clean/sitestats_e.csv", DataFrame)
@@ -29,16 +29,19 @@ phylocom_g  = strsite!(CSV.read("data/clean/phylocom_g.csv", DataFrame))
 coords_g    = strsite!(CSV.read("data/clean/coords_g.csv", DataFrame))
 sitestats_g = CSV.read("data/clean/sitestats_g.csv", DataFrame)
 sitestats_g.ID_geo = string.(sitestats_g.ID_geo)
+traits      = CSV.read("data/clean/traits.csv", DataFrame)
 
 # coordinates were pre-aligned to each phylocom's site order in preprocessing, so
 # they slot straight into the Assemblage (SpatialEcology aligns coords by row order).
 birds_e = Assemblage(phylocom_e, coords_e)
 addsitestats!(birds_e, sitestats_e, :ID_env)   # PC bins, area, occupancy, ...
+addtraits!(birds_e, traits, :species)
 richness_e = mapfigure(birds_e; title = "Environmental: species richness", label = "species")
 # save("figures/Env species richness.png", richness_e)
 
 birds_g = Assemblage(phylocom_g, coords_g)
 addsitestats!(birds_g, sitestats_g, :ID_geo)   # CHELSA bioclim, PC1-3, area, ...
+addtraits!(birds_g, traits, :species)
 richness_g = mapfigure(birds_g; title = "Geographic: species richness", label = "species",
                        figure = (; size = (1000, 500)))
 # save("figures/Geo species richness.png", richness_g)

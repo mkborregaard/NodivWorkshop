@@ -17,13 +17,19 @@ shared Google Drive folder that contains two subfolders:
 
 ```
 <Google Drive>/…/EnvSpace_Workshop/Nodiv project data/NodivWorkshop/
-├── data/      # inputs + the cached node_analysis.jld2 (res_e / res_g)
+├── data/      # raw RDS, cleaned inputs + the cached node_analysis.jld2 (res_e / res_g)
 └── figures/   # outputs
 ```
 
 In a working clone, `data/` and `figures/` are **symlinks** into that Drive folder
 (both are gitignored). The expensive `node_metrics(...; nsims=…)` run is cached to
 `data/node_analysis.jld2`. Don't recompute it: the script loads it from there.
+
+`preprocess.jl` reads the matched raw data, `data/data_birds_matched_simplified.rds`
+(phylogeny, presences and grids for both spaces, and AVONET traits), through RCall, so it
+needs R with the `sf` and `ape` packages. It writes the cleaned CSVs and the pruned tree
+that `script.jl` loads. The geographic grid is a Behrmann equal-area grid, so its cells are
+placed on an exact regular grid in Behrmann coordinates (km).
 
 ## Setup on a new machine
 
