@@ -216,27 +216,6 @@ function cluster_idmap(groups)
 end
 clustercolors(m) = (c = Makie.to_colormap(:tab20); [c[mod1(i, length(c))] for i in 1:m])
 
-# The branches of a `Hclust` dendrogram as line segments, with the merge height on x and the
-# leaves on y: leaf `hc.order[k]` sits at y = k, and each merge midway between its two
-# branches. So leaf k lines up with row k of a matrix reordered by `hc.order`.
-function dendrogram_segments(hc)
-    y = zeros(size(hc.merges, 1))
-    pos = invperm(hc.order)
-    segs = Point2d[]
-    for i in axes(hc.merges, 1)
-        h = hc.heights[i]
-        ends = map(hc.merges[i, :]) do c
-            c < 0 ? (0.0, Float64(pos[-c])) : (hc.heights[c], y[c])
-        end
-        for (hchild, yc) in ends
-            push!(segs, Point2d(hchild, yc), Point2d(h, yc))            # branch to the merge
-        end
-        push!(segs, Point2d(h, ends[1][2]), Point2d(h, ends[2][2]))     # the merge itself
-        y[i] = (ends[1][2] + ends[2][2]) / 2
-    end
-    segs
-end
-
 # (2) PRIMARY VIEW. Complete-linkage hierarchical clustering of the SOS-pattern distances,
 # drawn as a dendrogram-ordered |r| heatmap. Genuine groups (if any) appear as dense blocks
 # on the diagonal; the orthogonal/disjoint background stays uniform. Complete linkage is the
@@ -244,8 +223,9 @@ end
 # pairs. Cut the tree at |r| >= `simcut` (default 0.7, i.e. distance height 1 - simcut).
 # Layout is the standard clustermap: a horizontal dendrogram on the LEFT and the heatmap on
 # the RIGHT, sharing the y-axis (linked), so the leaves stay aligned with the heatmap rows;
-# the colourbar only takes width from the heatmap. The dendrogram's x-axis is reversed to put
-# the leaves (height 0) against the heatmap, and the heatmap's y labels print in the gap
+# the colourbar only takes width from the heatmap. The dendrogram is Makie's (experimental)
+# recipe, turned to put the leaves (height 0) against the heatmap; its heights are drawn at
+# negative x, so the ticks show them as positive. The heatmap's y labels print in the gap
 # between the two panels, so every dendrogram tip can be read straight off as a node name. The
 # x-axis carries the same names (rotated). The cut clusters with more than one node are
 # outlined on the diagonal with their number and colour from `plot_cluster_tree`. Tune
@@ -266,13 +246,16 @@ function sos_cluster_heatmap(res, nodes, title; minoverlap, method = :pearson,
 
     fig  = Figure(; size = figsize)
     Label(fig[0, 1:3], title; fontsize = 18, font = :bold)
-    dend = Axis(fig[1, 1]; xlabel = "1 - |r|", xreversed = true, xgridvisible = false,
+    dend = Axis(fig[1, 1]; xlabel = "1 - |r|", xtickformat = xs -> string.(round.(abs.(xs); digits = 2)),
+                xgridvisible = false,
                 ygridvisible = false, yticksvisible = false, yticklabelsvisible = false,
                 leftspinevisible = false, topspinevisible = false, rightspinevisible = false)
     hm   = Axis(fig[1, 2]; xticks = (1:n, labs), yticks = (1:n, labs),
                 xticklabelrotation = pi / 2, xticklabelsize = labelsize,
                 yticklabelsize = labelsize)
-    linesegments!(dend, dendrogram_segments(hc); color = :black)
+    # leaf hc.order[k] at y = k, lined up with heatmap row k; each merge at its height
+    dendrogram!(dend, Makie.hcl_nodes(hc; useheight = true); absolute = true, rotation = :right,
+                color = :black)
     h = heatmap!(hm, 1:n, 1:n, S; colormap = :viridis, colorrange = (0, 1))
     Colorbar(fig[1, 3], h; label = "|r|")
 
@@ -291,7 +274,7 @@ function sos_cluster_heatmap(res, nodes, title; minoverlap, method = :pearson,
     end
 
     linkyaxes!(dend, hm)
-    xlims!(dend, 0, 1.02maximum(hc.heights))
+    xlims!(dend, -1.02maximum(hc.heights), 0)
     limits!(hm, 0.5, n + 0.5, 0.5, n + 0.5)
     colsize!(fig.layout, 1, Relative(0.20))
     fig, hc, groups, labs
