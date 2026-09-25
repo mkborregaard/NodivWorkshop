@@ -21,7 +21,7 @@ set_theme!(colormap = Reverse(:Spectral))
 
 ### Load the cleaned inputs (from preprocess.jl) and build the assemblages -----
 
-tree = parsenewick(read("data/clean/tree.nwk", String))
+tree = sort!(parsenewick(read("data/clean/tree.nwk", String)))
 phylocom_e  = strsite!(CSV.read("data/clean/phylocom_e.csv", DataFrame))
 coords_e    = strsite!(CSV.read("data/clean/coords_e.csv", DataFrame))
 sitestats_e = CSV.read("data/clean/sitestats_e.csv", DataFrame)

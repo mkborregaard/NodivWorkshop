@@ -119,6 +119,9 @@ end
 for (node, taxon) in taxonnodes(tree, traits)
     renamenode!(tree, node, taxon)
 end
+# ladderize (order each node's clades by size) for plotting. parsenewick does not keep
+# the file's child order, so script.jl ladderizes again after reading the tree.
+sort!(tree)
 
 ### Write the cleaned inputs ---------------------------------------------------
 mkpath(outdir)
