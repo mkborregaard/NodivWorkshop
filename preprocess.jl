@@ -1,23 +1,25 @@
-# Preprocessing for the Nodiv bird analysis. Reads the raw data, harmonises the
-# taxonomy, and writes cleaned inputs to data/clean/ that `script.jl` then loads:
-#   - tree.jld2                               the pruned phylogeny
+# Preprocessing for the Nodiv bird analysis. Reads the matched raw data from
+# data/data_birds_matched_simplified.rds (an R list: phylogeny, e_space, g_space,
+# traits) and writes cleaned inputs to data/clean_new/ that `script.jl` then loads:
+#   - tree.nwk                                the pruned phylogeny
 #   - phylocom_e/g.csv, coords_e/g.csv,       per-space occurrences, coordinates,
 #     sitestats_e/g.csv                       and site covariates (e = env, g = geo)
+#   - traits.csv                              AVONET traits, one row per tree tip
 # Run this once (or whenever the raw data changes); it is the slow I/O step.
+# Needs R with the sf and ape packages.
 
-using CSV, DataFrames, Shapefile, Phylo, RCall
+using CSV, DataFrames, Phylo, RCall
 
-# Cross.csv maps the PAM/BirdLife taxonomy (Species1) to the tree/BirdTree
-# taxonomy (Species3); relabel PAM species to the tree names so the datasets
-# share as many taxa as possible.
-cross = CSV.read("data/Cross.csv", DataFrame)
-namemap = Dict(string(r.Species1) => replace(string(r.Species3), " " => "_")
-               for r in eachrow(cross) if !ismissing(r.Species1) && !ismissing(r.Species3))
+rdsfile = "data/data_birds_matched_simplified.rds"
+outdir = "data/clean_new"
 
-# long-format presence/absence table [site, abundance, species], species relabelled
+# The species names are already matched across tree, presences and traits in the
+# RDS; only swap spaces for underscores, as Newick tip labels need.
+underscore(s) = replace(string(s), " " => "_")
+
+# long-format presence/absence table [site, abundance, species]
 make_phylocom(sitevals, species) =
-    DataFrame(site = string.(sitevals), abundance = 1,
-              species = [get(namemap, s, replace(s, " " => "_")) for s in species])
+    DataFrame(site = string.(sitevals), abundance = 1, species = underscore.(species))
 
 # reorder a per-site (site, x, y) lookup to the assemblage's site order (unique
 # appearance in the phylocom), since SpatialEcology aligns coords by row order.
@@ -27,51 +29,80 @@ function align_coords(phylo, lookup)
     DataFrame(site = sites, x = lookup.x[idx], y = lookup.y[idx])
 end
 
+### Read the RDS in R ----------------------------------------------------------
+# The geographic grid is a Behrmann equal-area grid stored as (clipped, simplified)
+# lon/lat polygons. Projected back to Behrmann (ESRI:54017) it is exactly regular:
+# square cells one degree of longitude wide, with the lattice anchored at 0 (the
+# equator is a cell edge). So each cell's row and column follow from where its
+# centroid falls - a clipped coastal cell's centroid still lies inside the cell.
+R"""
+suppressMessages({library(sf); library(ape)})
+x <- readRDS($rdsfile)
+g <- x$g_space$grid_sf
+gb <- st_transform(st_geometry(g), "ESRI:54017")
+cellsize <- diff(sf_project("EPSG:4326", "ESRI:54017", rbind(c(0, 0), c(1, 0)))[, 1])
+cb <- st_coordinates(st_centroid(gb))
+ll <- st_coordinates(st_transform(st_centroid(gb), "EPSG:4326"))
+gdf <- st_drop_geometry(g)
+gdf$col <- floor(cb[, 1] / cellsize)
+gdf$row <- floor(cb[, 2] / cellsize)
+gdf$lon <- ll[, 1]
+gdf$lat <- ll[, 2]
+edf <- st_drop_geometry(x$e_space$grid_sf)
+tr <- x$phylogeny
+tr$node.label <- NULL                    # support values; Phylo rejects them as duplicate node names
+tr$tip.label <- gsub(" ", "_", tr$tip.label)
+"""
+cellsize = rcopy(R"cellsize")
+
 ### Environmental space --------------------------------------------------------
-env = CSV.read("data/Env.csv", DataFrame)
-pam_e = CSV.read("data/PAM_E.csv", DataFrame)
-phylocom_e = make_phylocom(pam_e.ID_env, pam_e.Species)
-coords_e = align_coords(phylocom_e,                       # PC bin midpoints
-    DataFrame(site = string.(env.ID_env), x = (env.xmin .+ env.xmax) ./ 2, y = (env.ymin .+ env.ymax) ./ 2))
-sitestats_e = env
+env = rcopy(DataFrame, R"edf")
+pres_e = rcopy(DataFrame, R"x$e_space$presence")
+phylocom_e = make_phylocom(pres_e.ID_env, pres_e.Species)
+sitestats_e = rename(env, :mn_g_d_ => :mean_geo_dist_km, :occupid => :occupied)
+sitestats_e.occupied = sitestats_e.occupied .== 1
 
 ### Geographic space -----------------------------------------------------------
-pam_g = CSV.read("data/PAM_G.csv", DataFrame)
-phylocom_g = make_phylocom(pam_g.ID_geo, pam_g.Species)
+geo = rcopy(DataFrame, R"gdf")
+pres_g = rcopy(DataFrame, R"x$g_space$presence")
+phylocom_g = make_phylocom(pres_g.ID_geo, pres_g.Species)
+allunique(zip(geo.col, geo.row)) || error("two grid cells fall in the same Behrmann cell")
+sitestats_g = select(geo, Not([:col, :row]))
+sitestats_g.area_m = parse.(Float64, sitestats_g.area_m)
+sitestats_g.ID_env = [s == "NA" ? missing : s for s in sitestats_g.ID_env]
 
-shp = Shapefile.Table(joinpath("data", "g_space", "BehrmannMeterGrid_WGS84_land_PCA_30.shp"))
-centroid(g) = (ex = extrema(p.x for p in g.points); ey = extrema(p.y for p in g.points);
-               ((ex[1] + ex[2]) / 2, (ey[1] + ey[2]) / 2))
-cents = centroid.(Shapefile.shapes(shp))
-# Behrmann equal-area cells -> regular grid: rank longitude into columns and
-# sin(latitude) into rows, scaling the sin axis by 1/(dlon*cos^2(30deg)) ~ 76.4 so
-# cells come out square; the -0.5 centres bins on the bands (avoids an equator gap).
-gridindex(v) = (u = sort(unique(v)); pos = Dict(u .=> eachindex(u)); Float64[pos[x] for x in v])
-behrmann = 1 / (deg2rad(1) * cosd(30)^2)
-coords_g = align_coords(phylocom_g,
-    DataFrame(site = string.(shp.ID_geo),
-              x = gridindex(round.(Int, first.(cents))),
-              y = gridindex(round.(Int, sin.(deg2rad.(last.(cents))) .* behrmann .- 0.5))))
-sitestats_g = select(DataFrame(shp), Not(:geometry))      # CHELSA bioclim, PC1-3, area, ...
-sitestats_g.ID_geo = string.(sitestats_g.ID_geo)
-
-### Phylogeny: strip numeric internal (support) labels Phylo rejects as duplicate
-### node names, then keep only the taxa shared by both spaces.
-tree = parsenewick(replace(read("data/birds.nwk", String), r"\)[0-9.]+" => ")"))
-keeptips!(tree, intersect(getleafnames(tree), unique(phylocom_e.species), unique(phylocom_g.species)))
+### Phylogeny: keep only the taxa present in both spaces, which also drops the few
+### species found in geographic space alone.
+tree = rcopy(RootedTree, R"tr")
+shared = intersect(getleafnames(tree), unique(phylocom_e.species), unique(phylocom_g.species))
+keeptips!(tree, shared)
 sort!(tree)
+filter!(r -> r.species in shared, phylocom_e)
+filter!(r -> r.species in shared, phylocom_g)
+
+# coordinates: PC bin midpoints for env; Behrmann cell centres in km for geo
+coords_e = align_coords(phylocom_e,
+    DataFrame(site = env.ID_env, x = env.pc1_mid, y = env.pc2_mid))
+coords_g = align_coords(phylocom_g,
+    DataFrame(site = geo.ID_geo, x = (geo.col .+ 0.5) .* cellsize ./ 1000,
+                                 y = (geo.row .+ 0.5) .* cellsize ./ 1000))
+
+### Traits: one row per tree tip, keyed by `species` for addtraits!
+traits = rcopy(DataFrame, R"x$traits")
+traits = select(traits, :Species1 => ByRow(underscore) => :species, Not(:Species1))
+filter!(r -> r.species in shared, traits)
 
 ### Write the cleaned inputs ---------------------------------------------------
-mkpath("data/clean")
-CSV.write("data/clean/phylocom_e.csv", phylocom_e)
-CSV.write("data/clean/coords_e.csv", coords_e)
-CSV.write("data/clean/sitestats_e.csv", sitestats_e)
-CSV.write("data/clean/phylocom_g.csv", phylocom_g)
-CSV.write("data/clean/coords_g.csv", coords_g)
-CSV.write("data/clean/sitestats_g.csv", sitestats_g)
+mkpath(outdir)
+CSV.write(joinpath(outdir, "phylocom_e.csv"), phylocom_e)
+CSV.write(joinpath(outdir, "coords_e.csv"), coords_e)
+CSV.write(joinpath(outdir, "sitestats_e.csv"), sitestats_e)
+CSV.write(joinpath(outdir, "phylocom_g.csv"), phylocom_g)
+CSV.write(joinpath(outdir, "coords_g.csv"), coords_g)
+CSV.write(joinpath(outdir, "sitestats_g.csv"), sitestats_g)
+CSV.write(joinpath(outdir, "traits.csv"), traits)
 # write the tree as Newick via R's ape::write.tree (Phylo has no Newick writer).
 # ape drops internal node labels, so re-reading renumbers internal nodes - fine
 # here, the labels are just auto-generated "Node N" placeholders anyway.
-treefile = "data/clean/tree.nwk"
-R"suppressMessages(library(ape))"
+treefile = joinpath(outdir, "tree.nwk")
 R"write.tree($tree, file = $treefile)"
