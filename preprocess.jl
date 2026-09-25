@@ -1,7 +1,7 @@
 # Preprocessing for the Nodiv bird analysis. Reads the matched raw data from
 # data/data_birds_matched_simplified.rds (an R list: phylogeny, e_space, g_space,
 # traits) and writes cleaned inputs to data/clean/ that `script.jl` then loads:
-#   - tree.nwk                                the pruned phylogeny
+#   - tree.nwk                                the pruned phylogeny, taxon-named nodes
 #   - phylocom_e/g.csv, coords_e/g.csv,       per-space occurrences, coordinates,
 #     sitestats_e/g.csv                       and site covariates (e = env, g = geo)
 #   - traits.csv                              AVONET traits, one row per tree tip
@@ -92,6 +92,34 @@ traits = rcopy(DataFrame, R"x$traits")
 traits = select(traits, :Species1 => ByRow(underscore) => :species, Not(:Species1))
 filter!(r -> r.species in shared, traits)
 
+### Name the internal nodes that are exactly a genus, family or order -----------
+# Round-trip the tree through ape's Newick first: that is the file script.jl used to
+# read, so parsing it back gives the same auto-generated "Node N" names that the
+# cached node analysis (data/node_analysis.jld2) is keyed by.
+tree = parsenewick(rcopy(String, R"write.tree($tree)"))
+
+# For each genus (from the species name), family and order with more than one
+# species, rename its MRCA to the taxon if the taxon is monophyletic - its species
+# are exactly the tips below that node. Non-monophyletic taxa stay unnamed. Where one
+# clade is several taxa at once (e.g. a family of a single genus) the highest rank wins.
+function taxonnodes(tree, traits)
+    genus = String.(first.(split.(traits.species, "_")))
+    names = Dict{String, String}()
+    for taxa in (genus, traits.Family1, traits.Order1)   # low to high rank: higher overwrites
+        for taxon in unique(taxa)
+            sp = traits.species[taxa .== taxon]
+            length(sp) > 1 || continue
+            node = getnodename(tree, mrca(tree, sp))
+            ntips = count(n -> isleaf(tree, n), getdescendants(tree, node))
+            ntips == length(sp) && (names[node] = taxon)
+        end
+    end
+    names
+end
+for (node, taxon) in taxonnodes(tree, traits)
+    renamenode!(tree, node, taxon)
+end
+
 ### Write the cleaned inputs ---------------------------------------------------
 mkpath(outdir)
 CSV.write(joinpath(outdir, "phylocom_e.csv"), phylocom_e)
@@ -101,8 +129,6 @@ CSV.write(joinpath(outdir, "phylocom_g.csv"), phylocom_g)
 CSV.write(joinpath(outdir, "coords_g.csv"), coords_g)
 CSV.write(joinpath(outdir, "sitestats_g.csv"), sitestats_g)
 CSV.write(joinpath(outdir, "traits.csv"), traits)
-# write the tree as Newick via R's ape::write.tree (Phylo has no Newick writer).
-# ape drops internal node labels, so re-reading renumbers internal nodes - fine
-# here, the labels are just auto-generated "Node N" placeholders anyway.
-treefile = joinpath(outdir, "tree.nwk")
-R"write.tree($tree, file = $treefile)"
+# Phylo's own Newick writer keeps every internal node name, taxon or "Node N", so
+# re-reading the file gives back exactly these names.
+write(joinpath(outdir, "tree.nwk"), tree)
