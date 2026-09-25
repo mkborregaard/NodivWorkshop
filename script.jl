@@ -1,14 +1,26 @@
 # Node-based analysis of bird diversity, in environmental (birds_e) and geographic
-
 # (birds_g) space. Run preprocess.jl first to build the cleaned inputs in
 # data/clean/; this script loads them, builds the assemblages, computes and caches
 # the node analysis, and explores the results.
+#
+# Plotting is Makie: NodivMakie for trees, maps and node panels, GLMakie for interactive
+# windows. Run it in the REPL or VS Code; each figure is kept in a variable, so evaluate
+# the variable to show it again.
 
-using CSV, DataFrames, SpatialEcology, Phylo, Plots
-using MultivariateStats, Statistics, JLD2, LogExpFunctions, GLM
-using Nodiv
+using CSV, DataFrames, JLD2
+using MultivariateStats, Statistics, LogExpFunctions, GLM
+import CairoMakie            # only for saving vector (PDF) files; GLMakie saves raster formats
+using GLMakie, NodivMakie    # NodivMakie re-exports Makie, Phylo, SpatialEcology and Nodiv
+GLMakie.activate!()          # loading a backend activates it, so make sure GLMakie is the one
 
-default(color = cgrad(:Spectral, rev = true))
+set_theme!(colormap = Reverse(:Spectral))
+
+# A map of one value per site, with a colour bar beside it
+function mapfigure(args...; title = "", label = "", kw...)
+    fig, ax, p = sitemap(args...; axis = (; title), kw...)
+    Colorbar(fig[1, 2], p; label)
+    fig
+end
 
 ### Load the cleaned inputs (from preprocess.jl) and build the assemblages -----
 
@@ -26,11 +38,12 @@ sitestats_g.ID_geo = string.(sitestats_g.ID_geo)
 # they slot straight into the Assemblage (SpatialEcology aligns coords by row order).
 birds_e = Assemblage(phylocom_e, coords_e)
 addsitestats!(birds_e, sitestats_e, :ID_env)   # PC bins, area, occupancy, ...
-plot(birds_e)
+richness_e = mapfigure(birds_e; title = "Species richness (environmental)", label = "species")
 
 birds_g = Assemblage(phylocom_g, coords_g)
 addsitestats!(birds_g, sitestats_g, :ID_geo)   # CHELSA bioclim, PC1-3, area, ...
-plot(birds_g)
+richness_g = mapfigure(birds_g; title = "Species richness (geographic)", label = "species",
+                       figure = (; size = (1000, 500)))
 
 ### Heavy step: GND + SOS for every node, both spaces, cached to disk ----------
 # `node_analysis` computes GND and the per-cell SOS together (SOS is needed for
@@ -58,35 +71,71 @@ divergent_e = divergent_nodes(res_e; by = metric, threshold = 2)
 divergent_g = divergent_nodes(res_g; by = metric, threshold = 2)
 divergent = divergent_e ∩ divergent_g
 
-# GND of just the divergent nodes mapped onto the tree (plot_gnd marks every node
-# in the Dict it is given, so pass the divergent subset rather than the full result)
-plot_gnd(tree, Dict(n => e_metric[n] for n in divergent_e))
-plot_gnd(tree, Dict(n => g_metric[n] for n in divergent_g))
+# The metric of just the divergent nodes mapped onto the tree (markers only at `nodes`:
+# a node missing from the Dict would get a transparent fill but still its outline).
+# GND is a proportion, so it gets a fixed 0-1 colour range, as plot_gnd used.
+function metric_tree(tree, values, nodes, title)
+    colorrange = metric === :gnd ? (0, 1) : Makie.automatic
+    fig, ax, p = treeplot(tree; treetype = :fan, showtips = false,
+                          nodecolor = Dict(n => values[n] for n in nodes), shownodes = nodes,
+                          markersize = 8, strokewidth = 0.5, colormap = :YlOrRd, colorrange, axis = (; title),
+                          figure = (; size = (800, 700)))
+    Colorbar(fig[1, 2], p; label = string(metric))
+    fig
+end
+metric_tree_e = metric_tree(tree, e_metric, divergent_e, "Divergent nodes, $metric (environmental)")
+metric_tree_g = metric_tree(tree, g_metric, divergent_g, "Divergent nodes, $metric (geographic)")
 
 # SOS of the most divergent node mapped onto each space (cached SOS, no recompute)
 focal_e = argmax(n -> e_metric[n], divergent_e)
-plot(res_e.sos[focal_e], birds_e, fillcolor = :RdYlBu, clim = (-8, 8), title = "env SOS - $focal_e")
+sosmap_e = mapfigure(res_e.sos[focal_e], birds_e; colormap = :RdYlBu, colorrange = (-8, 8),
+                     title = "env SOS - $focal_e", label = "SOS")
 focal_g = argmax(n -> g_metric[n], divergent_g)
-plot(res_g.sos[focal_g], birds_g, fillcolor = :RdYlBu, clim = (-8, 8), title = "geo SOS - $focal_g")
+sosmap_g = mapfigure(res_g.sos[focal_g], birds_g; colormap = :RdYlBu, colorrange = (-8, 8),
+                     title = "geo SOS - $focal_g", label = "SOS", figure = (; size = (1000, 500)))
 
-# parent/SOS/children panel for that node (4th arg = cached SOS, no recompute)
-plot_node(birds_e, tree, focal_e, res_e)
-plot_node(birds_g, tree, focal_g, res_g)
+# The interactive entry point: the fan tree with the divergent nodes marked, next to the
+# parent/SOS/children panel. Each opens on its space's most divergent node (focal_e,
+# focal_g above). Click a node or a branch to show that node; hover for labels. The
+# Birds of the World images in bow_images/ are private and not in the repo: they are
+# used only if that folder is there.
+imagedir = "bow_images/workshop_species"
+explorer_options = (; metric, images = isdir(imagedir) ? imagedir : nothing,
+                    imageoptions = (; whitebackground = true))
+explorer_fig_e, explorer_e = nodeexplorer(birds_e, tree, res_e; nodes = divergent_e, explorer_options...)
+explorer_fig_g, explorer_g = nodeexplorer(birds_g, tree, res_g; nodes = divergent_g, explorer_options...)
+
+# Link the two: a node picked in one space is shown in the other too, if it has an SOS there
+for (from, to, res) in ((explorer_g, explorer_e, res_e), (explorer_e, explorer_g, res_g))
+    on(from.panel.node) do n
+        n != to.panel.node[] && hassos(tree, res.sos, n) && (to.panel.node[] = n)
+    end
+end
+
+# each explorer in its own window (NODIVWORKSHOP_WINDOWS=false skips this, e.g. headless)
+if isinteractive() && get(ENV, "NODIVWORKSHOP_WINDOWS", "true") != "false"
+    display(GLMakie.Screen(), explorer_fig_e)
+    display(GLMakie.Screen(), explorer_fig_g)
+end
 
 # ordinate the divergent nodes by SOS-pattern similarity (cached SOS -> distances
 # from Nodiv -> MDS; presentation stays here)
 function sos_mds_plot(res, nodes, title)
     coords = predict(fit(MDS, sos_distances(res, nodes); distances = true, maxoutdim = 2))
-    scatter(coords[1, :], coords[2, :], label = "",
-            series_annotations = text.(nodes, 6, :bottom),
-            xlabel = "MDS axis 1", ylabel = "MDS axis 2", title = title)
+    fig, ax, _ = scatter(coords[1, :], coords[2, :];
+                         axis = (; xlabel = "MDS axis 1", ylabel = "MDS axis 2", title))
+    text!(ax, coords[1, :], coords[2, :]; text = nodes, fontsize = 8,
+          align = (:center, :bottom), offset = (0, 4))
+    fig
 end
-sos_mds_plot(res_e, divergent, "SOS-pattern similarity (environmental)")
-sos_mds_plot(res_g, divergent, "SOS-pattern similarity (geographic)")
+mds_e = sos_mds_plot(res_e, divergent, "SOS-pattern similarity (environmental)")
+mds_g = sos_mds_plot(res_g, divergent, "SOS-pattern similarity (geographic)")
 
+# parent/SOS/children panel for one node (4th arg = cached SOS, no recompute); also
+# `explorer_e.panel.node[] = focal` shows it in the explorer
 focal = "Node 17672"
-plot_node(birds_e, tree, focal, res_e)
-plot_node(birds_g, tree, focal, res_g)
+panel_e, _ = nodepanel(birds_e, tree, focal, res_e)
+panel_g, _ = nodepanel(birds_g, tree, focal, res_g)
 
 same = divergent_e ∩ divergent_g
 
@@ -97,28 +146,29 @@ dat = DataFrame(
 )
 dat = filter(row -> all(x -> !ismissing(x) && isfinite(x), row), dat)
 
-scatter(dat.logit_g, dat.logit_e,
-        xlabel = "geo $metric", ylabel = "env $metric", label = "")
+metric_scatter = scatter(dat.logit_g, dat.logit_e;
+                         axis = (; xlabel = "geo $metric", ylabel = "env $metric"))
+ablines!(metric_scatter.axis, 0, 1; color = :red)   # the 1:1 line
 
 mod = lm(@formula(logit_e ~ logit_g), dat)
 
 
 sizes = Dict(node => noccupied(get_clade(birds_e, tree, node)) for node in nodes)
-histogram(collect(values(sizes)))
+sizes_hist = hist(collect(values(sizes)); axis = (; xlabel = "occupied env sites", ylabel = "nodes"))
 
-plot(tree, treetype = :fan, marker_z = sizes, showtips = false, msw = 0)
+sizes_tree = let (fig, ax, p) = treeplot(tree; treetype = :fan, nodecolor = sizes, showtips = false,
+                                         markersize = 5, figure = (; size = (800, 700)))
+    Colorbar(fig[1, 2], p; label = "occupied env sites")
+    fig
+end
 
-scatter([sizes[n] for n in nodes], [e_metric[n] for n in nodes],
-        xlabel = "occupied env sites", ylabel = "env $metric", label = "")
+sizes_scatter = scatter([sizes[n] for n in nodes], [e_metric[n] for n in nodes];
+                        axis = (; xlabel = "occupied env sites", ylabel = "env $metric"))
 
 
 nodesizes = Dict(node => nspecies(get_clade(birds_g, tree, node)) for node in nodes)
-scatter([log(nodesizes[n]) for n in nodes], [g_metric[n] for n in nodes],
-        xlabel = "number of species in clade", ylabel = "geo $metric", label = "")
-
-
-
-plot!([-2, 4], [-2, 4], c = :red, label = "")
+nodesizes_scatter = scatter([log(nodesizes[n]) for n in nodes], [g_metric[n] for n in nodes];
+                            axis = (; xlabel = "number of species in clade", ylabel = "geo $metric"))
 
 
 ### ===========================================================================
@@ -133,8 +183,7 @@ plot!([-2, 4], [-2, 4], c = :red, label = "")
 ### tens of PC bins, geographic over ~18k cells).
 ### ===========================================================================
 
-using Clustering, StatsPlots, Graphs, LinearAlgebra
-using Plots.PlotMeasures: mm     # margin units (mm) for the labelled heatmap
+using Clustering, Graphs, LinearAlgebra
 
 # Per-space minimum-overlap floors for the correlation's own sample size. The geographic
 # scan has ~18k cells, so a floor of ~8 shared occupied cells is defensible; the
@@ -151,8 +200,40 @@ function sos_mds_eigenvalues(res, nodes, title; minoverlap, method = :pearson)
     D = sos_distances(res, nodes; minoverlap, method)
     M = fit(MDS, D; distances = true, maxoutdim = min(10, length(nodes) - 1))
     λ = eigvals(M)
-    bar(1:length(λ), λ, label = "", xlabel = "MDS axis", ylabel = "eigenvalue",
-        title = "$title  (n = $(length(nodes)))")
+    fig, ax, _ = barplot(1:length(λ), λ;
+                         axis = (; xlabel = "MDS axis", ylabel = "eigenvalue",
+                                 title = "$title  (n = $(length(nodes)))"))
+    fig
+end
+
+# The clusters worth showing: the cut clusters with more than one node, relabelled 1..m in
+# the order of their `cutree` ids. The heatmap and the tree both number and colour the
+# clusters by this, so the two views cross-reference directly.
+function cluster_idmap(groups)
+    ids = sort(collect(keys(sos_cluster_sizes(groups).members)))
+    Dict(c => i for (i, c) in enumerate(ids))
+end
+clustercolors(m) = (c = Makie.to_colormap(:tab20); [c[mod1(i, length(c))] for i in 1:m])
+
+# The branches of a `Hclust` dendrogram as line segments, with the merge height on x and the
+# leaves on y: leaf `hc.order[k]` sits at y = k, and each merge midway between its two
+# branches. So leaf k lines up with row k of a matrix reordered by `hc.order`.
+function dendrogram_segments(hc)
+    y = zeros(size(hc.merges, 1))
+    pos = invperm(hc.order)
+    segs = Point2d[]
+    for i in axes(hc.merges, 1)
+        h = hc.heights[i]
+        ends = map(hc.merges[i, :]) do c
+            c < 0 ? (0.0, Float64(pos[-c])) : (hc.heights[c], y[c])
+        end
+        for (hchild, yc) in ends
+            push!(segs, Point2d(hchild, yc), Point2d(h, yc))            # branch to the merge
+        end
+        push!(segs, Point2d(h, ends[1][2]), Point2d(h, ends[2][2]))     # the merge itself
+        y[i] = (ends[1][2] + ends[2][2]) / 2
+    end
+    segs
 end
 
 # (2) PRIMARY VIEW. Complete-linkage hierarchical clustering of the SOS-pattern distances,
@@ -161,17 +242,18 @@ end
 # conservative default - it groups only all-pairs-similar nodes and will not chain marginal
 # pairs. Cut the tree at |r| >= `simcut` (default 0.7, i.e. distance height 1 - simcut).
 # Layout is the standard clustermap: a horizontal dendrogram on the LEFT and the heatmap on
-# the RIGHT, sharing the y-axis. This keeps the leaves aligned with the heatmap rows whatever
-# the colourbar does - the colourbar only steals width from the heatmap and so can never shift
-# the row correspondence (the failure mode of stacking the dendrogram on top). `xflip` puts the
-# leaves (height 0) hard against the heatmap, and the heatmap's y labels print in the gap
+# the RIGHT, sharing the y-axis (linked), so the leaves stay aligned with the heatmap rows;
+# the colourbar only takes width from the heatmap. The dendrogram's x-axis is reversed to put
+# the leaves (height 0) against the heatmap, and the heatmap's y labels print in the gap
 # between the two panels, so every dendrogram tip can be read straight off as a node name. The
-# x-axis carries the same names (rotated). Tune `labelsize`/`figsize` for iterative exploration.
-# Returns (plot, hclust, groups::Dict node=>cluster, ordered_nodes) - `ordered_nodes` is the
-# leaf order, top-to-bottom, shown on the axes.
+# x-axis carries the same names (rotated). The cut clusters with more than one node are
+# outlined on the diagonal with their number and colour from `plot_cluster_tree`. Tune
+# `labelsize`/`figsize` for iterative exploration.
+# Returns (figure, hclust, groups::Dict node=>cluster, ordered_nodes) - `ordered_nodes` is the
+# leaf order, bottom-to-top, shown on the axes.
 function sos_cluster_heatmap(res, nodes, title; minoverlap, method = :pearson,
                              simcut = 0.7, linkage = :complete,
-                             labelsize = 5, figsize = (1300, 1150))
+                             labelsize = 9, figsize = (1300, 1150))
     D    = sos_distances(res, nodes; minoverlap, method)
     hc   = hclust(D; linkage)
     ord  = hc.order
@@ -179,23 +261,39 @@ function sos_cluster_heatmap(res, nodes, title; minoverlap, method = :pearson,
     labs = nodes[ord]                             # node names in dendrogram-leaf order
     S    = (1 .- D)[ord, ord]                     # similarity |r|, reordered to match
     n    = length(labs)
-    # `orientation = :horizontal` drives StatsPlots' dendrogram recipe (it emits a harmless
-    # "orientation is deprecated" notice from Plots - the recipe still consumes it). That recipe
-    # also defaults the height axis to the SUM of merge heights, squashing the tree into a sliver,
-    # so set `xlims` to the actual root height instead. `xflip` then puts the leaves (height 0)
-    # against the heatmap.
-    dend = plot(hc; orientation = :horizontal, xflip = true, yticks = false,
-                xlims = (0, 1.02maximum(hc.heights)),
-                xlabel = "1 - |r|", linecolor = :black, legend = false,
-                left_margin = 4mm, bottom_margin = (6 + 1.6labelsize)mm)
-    hm   = heatmap(S; c = :viridis, clims = (0, 1), colorbar_title = "|r|",
-                   xticks = (1:n, labs), yticks = (1:n, labs), xrotation = 90,
-                   tickfontsize = labelsize, left_margin = (4 + 1.4labelsize)mm,
-                   bottom_margin = (6 + 1.6labelsize)mm)
-    p = plot(dend, hm; layout = Plots.grid(1, 2, widths = [0.20, 0.80]), link = :y,
-             size = figsize, plot_title = title)
     groups = Dict(node => grp[i] for (i, node) in enumerate(nodes))
-    p, hc, groups, labs
+
+    fig  = Figure(; size = figsize)
+    Label(fig[0, 1:3], title; fontsize = 18, font = :bold)
+    dend = Axis(fig[1, 1]; xlabel = "1 - |r|", xreversed = true, xgridvisible = false,
+                ygridvisible = false, yticksvisible = false, yticklabelsvisible = false,
+                leftspinevisible = false, topspinevisible = false, rightspinevisible = false)
+    hm   = Axis(fig[1, 2]; xticks = (1:n, labs), yticks = (1:n, labs),
+                xticklabelrotation = pi / 2, xticklabelsize = labelsize,
+                yticklabelsize = labelsize)
+    linesegments!(dend, dendrogram_segments(hc); color = :black)
+    h = heatmap!(hm, 1:n, 1:n, S; colormap = :viridis, colorrange = (0, 1))
+    Colorbar(fig[1, 3], h; label = "|r|")
+
+    idmap = cluster_idmap(groups)
+    colors = clustercolors(length(idmap))
+    for (c, i) in idmap                           # cutree clusters are contiguous in `ord`
+        rows = findall(==(c), grp[ord])
+        lo, hi = extrema(rows)
+        box = Rect2d(lo - 0.5, lo - 0.5, hi - lo + 1, hi - lo + 1)
+        poly!(hm, box; color = :transparent, strokecolor = :black, strokewidth = 4)
+        poly!(hm, box; color = :transparent, strokecolor = colors[i], strokewidth = 2)
+        textlabel!(hm, Point2d(hi + 0.5, hi + 0.5); text = string(i), fontsize = 11,
+                   background_color = colors[i], strokewidth = 1, padding = 2,
+                   cornerradius = 2,   # inside the corner at the top edge, not clipped
+                   text_align = hi == n ? (:right, :top) : (:left, :bottom))
+    end
+
+    linkyaxes!(dend, hm)
+    xlims!(dend, 0, 1.02maximum(hc.heights))
+    limits!(hm, 0.5, n + 0.5, 0.5, n + 0.5)
+    colsize!(fig.layout, 1, Relative(0.20))
+    fig, hc, groups, labs
 end
 
 # Cluster-size table for a `groups` Dict: how many nodes fall in each cut cluster, and which
@@ -209,21 +307,20 @@ function sos_cluster_sizes(groups)
     (; nclusters = length(counts), nsingletons = count(==(1), values(counts)), members)
 end
 
-# Map the heatmap clusters onto the phylogeny. Reuses Nodiv's `plot_gnd`, which draws a marker
-# at every node in the Dict it is given and nothing elsewhere. Only the non-trivial clusters
-# (size > 1) are drawn, each a distinct colour; idiosyncratic singletons are left unmarked so
-# the co-patterned groups stand out against the tree. Pass the `groups` Dict that
-# `sos_cluster_heatmap` returned. Cluster ids are relabelled 1..m for a compact colour scale -
-# the same id labels the heatmap cut and this tree, so the two views cross-reference directly.
-function plot_cluster_tree(tree, groups, title; markersize = 9, kw...)
-    members = sos_cluster_sizes(groups).members          # cluster_id => member nodes (size > 1)
-    ids     = sort(collect(keys(members)))
-    idmap   = Dict(c => i for (i, c) in enumerate(ids))   # compact 1..m for the categorical scale
-    shown   = Dict(n => float(idmap[c]) for c in ids for n in members[c])
-    m       = length(ids)
-    plot_gnd(tree, shown; color = cgrad(:tab20, max(m, 2); categorical = true),
-             clim = (0.5, m + 0.5), colorbar_title = "cluster", title = title,
-             markersize, kw...)                            # markersize now overridable (recipe fix)
+# Map the heatmap clusters onto the phylogeny: a marker at each node of a non-trivial
+# cluster (size > 1), one colour per cluster, and nothing elsewhere, so the co-patterned
+# groups stand out against the tree; idiosyncratic singletons are left unmarked. Pass the
+# `groups` Dict that `sos_cluster_heatmap` returned. The cluster numbers and colours are
+# those outlined on the heatmap (`cluster_idmap`).
+function plot_cluster_tree(tree, groups, title; markersize = 12, kw...)
+    idmap = cluster_idmap(groups)
+    shown = Dict(n => idmap[c] for (n, c) in groups if haskey(idmap, c))
+    fig, ax, p = treeplot(tree; treetype = :fan, showtips = false, nodegroup = shown,
+                          groupcolors = clustercolors(length(idmap)), markersize,
+                          strokewidth = 0.5, strokecolor = :gray30, axis = (; title),
+                          figure = (; size = (900, 800)), kw...)
+    Legend(fig[1, 2], ax, "cluster")
+    fig
 end
 
 # (3) SECONDARY / CONFIRMATORY. Thresholded similarity graph + connected components. Build an
@@ -253,7 +350,7 @@ heat_e, hc_e, groups_e, order_e = sos_cluster_heatmap(res_e, divergent, "SOS clu
 communities_g = sos_similarity_communities(res_g, divergent; minoverlap = MINOVERLAP_G)
 communities_e = sos_similarity_communities(res_e, divergent; minoverlap = MINOVERLAP_E)
 
-# Clusters mapped back onto the phylogeny (colours match the heatmap cut ids above)
+# Clusters mapped back onto the phylogeny (numbers and colours match the heatmap outlines)
 tree_clusters_g = plot_cluster_tree(tree, groups_g, "Geographic SOS clusters on the phylogeny")
 tree_clusters_e = plot_cluster_tree(tree, groups_e, "Environmental SOS clusters on the phylogeny")
 
@@ -268,40 +365,36 @@ sizes_e = sos_cluster_sizes(groups_e)
 
 ### --- Two node-level views of the divergent set ------------------------------------------
 
-# (Task 1) Fan tree showing ONLY the divergent `nodes`, each labelled with its name on a small
-# pale background so it stays readable over the branches; the rest of the tree is a plain
-# skeleton. Labels are squares centred on each node (positions computed in the same fan
-# coordinates the Phylo recipe uses: radius = node height, angle from node depth). The labels
-# will overlap if packed too tightly, so widen `figsize` (or drop `fontsize`) until they clear;
-# `stripprefix` drops the redundant "Node " so the boxes stay small.
-function plot_divergent_tree(tree, nodes; fontsize = 6, boxsize = 18,
-                             figsize = (1600, 1600), stripprefix = true)
-    height, depth, _ = Phylo._findxy(tree)               # radius = height, angle from depth
-    nleaves = length(getleafnames(tree))
-    ang(node) = 2pi * depth[node] / (nleaves + 1)
-    xs = [height[node] * cos(ang(node)) for node in nodes]
-    ys = [height[node] * sin(ang(node)) for node in nodes]
+# (Task 1) Fan tree showing ONLY the divergent `nodes`, each labelled with its name in a small
+# pale box so it stays readable over the branches; the rest of the tree is a plain grey
+# skeleton. The boxes are centred on the nodes (`node_points` of the tree plot) and sized to
+# their labels. They will overlap if packed too tightly, so widen `figsize` (or drop
+# `fontsize`) until they clear; `stripprefix` drops the redundant "Node " so the boxes stay small.
+function plot_divergent_tree(tree, nodes; fontsize = 11, figsize = (1600, 1600), stripprefix = true)
     labels = stripprefix ? replace.(string.(nodes), "Node " => "") : string.(nodes)
-    plt = plot(tree; treetype = :fan, showtips = false, linecolor = :gray75,
-               legend = false, colorbar = false, size = figsize)
-    scatter!(plt, xs, ys; markershape = :rect, markersize = boxsize,
-             markercolor = :lightyellow, markeralpha = 0.85, markerstrokecolor = :gray40,
-             markerstrokewidth = 0.3, label = "",
-             series_annotations = text.(labels, fontsize, :center, :black))
-    plt
+    fig, ax, p = treeplot(tree; treetype = :fan, showtips = false, branchcolor = :gray75,
+                          figure = (; size = figsize))
+    idx = [p.tree_layout[].index[n] for n in nodes]
+    textlabel!(ax, p.node_points[][idx]; text = labels, fontsize,
+               background_color = (:lightyellow, 0.85), strokecolor = :gray40,
+               strokewidth = 0.5, padding = 2)
+    fig
 end
 
-# (Task 2) One 4-panel `plot_node` (parent / SOS / child 1 / child 2) per node, written as a
+# (Task 2) One 4-panel node panel (parent / SOS / child 1 / child 2) per node, written as a
 # single multi-page PDF, one node per page. SOS panel comes from the cached `res` - no
-# recompute. Pages are rendered individually and merged with `pdfunite` (poppler).
+# recompute. The panel is built once and switched from node to node; each page is saved with
+# CairoMakie (GLMakie cannot write PDF) and the pages merged with `pdfunite` (poppler).
 function plot_node_pdf(assemblage, tree, nodes, res, outfile)
     Sys.which("pdfunite") === nothing &&
         error("plot_node_pdf needs `pdfunite` (poppler) on PATH - install it (e.g. `brew install poppler`)")
     tmp = mktempdir()
     pages = String[]
+    fig, panel = nodepanel(assemblage, tree, first(nodes), res)
     for (i, node) in enumerate(nodes)
+        panel.node[] = node
         page = joinpath(tmp, string(lpad(i, 3, '0'), ".pdf"))
-        savefig(plot_node(assemblage, tree, node, res), page)
+        save(page, fig; backend = CairoMakie)
         push!(pages, page)
     end
     run(`pdfunite $pages $outfile`)
@@ -311,5 +404,5 @@ function plot_node_pdf(assemblage, tree, nodes, res, outfile)
 end
 
 divergent_tree = plot_divergent_tree(tree, divergent)
-plot_node_pdf(birds_g, tree, divergent, res_g, "divergent_node_panels_geo.pdf")
-plot_node_pdf(birds_e, tree, divergent, res_e, "divergent_node_panels_env.pdf")
+plot_node_pdf(birds_g, tree, divergent, res_g, "figures/divergent_node_panels_geo.pdf")
+plot_node_pdf(birds_e, tree, divergent, res_e, "figures/divergent_node_panels_env.pdf")

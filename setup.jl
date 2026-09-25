@@ -4,8 +4,13 @@
 #
 # The workshop keeps its large inputs and output figures OUT of git, in a shared
 # Google Drive folder that contains `data/` and `figures/`. This script links those
-# two folders into the repo and instantiates the Julia environment. Nodiv and every
-# other dependency come from the General registry, so nothing here is machine-specific.
+# two folders into the repo and instantiates the Julia environment. Nodiv and the other
+# dependencies come from the General registry, except NodivMakie (the plotting), which is
+# not registered and is installed from GitHub (see `[sources]` in Project.toml). Nothing
+# here is machine-specific.
+#
+# The optional species images (bow_images/, private and never in the repo) are not set up
+# here; the script uses them only if bow_images/workshop_species exists. See README.md.
 #
 # Usage:
 #   julia setup.jl /path/to/NodivWorkshop         # the Drive folder holding data/ & figures/
@@ -75,7 +80,7 @@ for sub in ("data", "figures")
     link_dir(sub, root)
 end
 
-println("Instantiating the Julia environment (Nodiv & deps from the General registry)…")
+println("Instantiating the Julia environment (the General registry, and NodivMakie from GitHub)…")
 Pkg.activate(REPO)
 Pkg.instantiate()
-println("Done. Run the analysis with:  julia --project=. script.jl")
+println("Done. Open a REPL with  julia --project=.  and run  include(\"script.jl\")")
