@@ -1,8 +1,11 @@
 # NodivWorkshop
 
-Integration workflow that drives [Nodiv.jl](https://github.com/mkborregaard/Nodiv.jl):
-`script.jl` runs the node-based SOS/GND analysis end to end and produces the figures.
-`preprocess.jl` prepares the inputs. All plotting is done with
+An analysis in progress with [Nodiv.jl](https://github.com/mkborregaard/Nodiv.jl): the
+node-based SOS/GND analysis of birds in environmental and geographic space.
+`preprocess.jl` prepares the inputs. `script.jl` is worked through interactively, a line or
+block at a time and not necessarily in order; it is not meant to be run top to bottom.
+Helper functions that are finished live in `functions.jl`, which the script `include`s;
+functions still being developed stay in the script. All plotting is done with
 [Makie](https://docs.makie.org), through
 [NodivMakie.jl](https://github.com/mkborregaard/NodivMakie.jl) for the trees, maps and
 node panels, with GLMakie for interactive windows.
@@ -45,18 +48,19 @@ In a working clone, `data/` and `figures/` are **symlinks** into that Drive fold
    julia --project=.
    ```
 
-   and then `include("script.jl")`.
+   and then evaluate `script.jl` line by line or block by block (e.g. in VS Code). The
+   `using` block and `include("functions.jl")` at the top come first.
 
 > On Windows, creating the symlinks needs Developer Mode or an elevated shell.
 
 ## Figures
 
 Every figure is kept in a variable (`richness_g`, `metric_tree_e`, `heat_g`,
-`tree_clusters_e`, …). Evaluate one to show it, or save it with
-`save("figures/name.png", fig)`. GLMakie writes raster formats; for vector files use
-`save("figures/name.pdf", fig; backend = CairoMakie)`. The script itself writes one
-multi-page PDF of node panels per space to `figures/`, which needs `pdfunite` (poppler,
-`brew install poppler`).
+`tree_clusters_e`, …). Evaluate one to show it. Below each figure is a commented-out
+`save("figures/…", fig)` line: uncomment it to write that figure. GLMakie writes raster
+formats; for vector files use `save("figures/name.pdf", fig; backend = CairoMakie)`. The
+(also commented-out) `plot_node_pdf` lines at the end write one multi-page PDF of node
+panels per space, which needs `pdfunite` (poppler, `brew install poppler`).
 
 The interactive entry point is the **node explorer**, one per space
 (`explorer_fig_e`, `explorer_fig_g`). In a REPL they open in their own windows. Each shows
