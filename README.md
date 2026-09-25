@@ -60,10 +60,12 @@ multi-page PDF of node panels per space to `figures/`, which needs `pdfunite` (p
 
 The interactive entry point is the **node explorer**, one per space
 (`explorer_fig_e`, `explorer_fig_g`). In a REPL they open in their own windows. Each shows
-the fan tree with the divergent nodes marked, next to the node panel (the clade's
-richness, its SOS, and the richness of its two child clades).
-- Click a node marker, or the branch leading to a node, to show that node.
-- Hover over nodes, branches and map cells for labels.
+the fan tree with the divergent nodes marked, next to the node's SOS map, the richness of
+its two child clades, and an ordination (MDS) of the divergent nodes by the similarity of
+their SOS maps.
+- Click a node marker, or the branch leading to a node, to show that node. Clicking a
+  point in the ordination does the same; the node shown has a ring there.
+- Hover over nodes, branches, ordination points and map cells for labels.
 - The two explorers are linked: a node picked in one is shown in the other, if it has
   an SOS there.
 - `explorer_g.panel.node[] = "Node 17672"` shows a node from code.

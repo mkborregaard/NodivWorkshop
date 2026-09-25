@@ -8,7 +8,7 @@
 # the variable to show it again.
 
 using CSV, DataFrames, JLD2
-using MultivariateStats, Statistics, LogExpFunctions, GLM
+using Statistics, LogExpFunctions, GLM
 using SpatialEcology, Phylo, Nodiv
 import CairoMakie            # only for saving vector (PDF) files; GLMakie saves raster formats
 using GLMakie, NodivMakie
@@ -95,16 +95,28 @@ focal_g = argmax(n -> g_metric[n], divergent_g)
 sosmap_g = mapfigure(res_g.sos[focal_g], birds_g; colormap = :RdYlBu, colorrange = (-8, 8),
                      title = "geo SOS - $focal_g", label = "SOS", figure = (; size = (1000, 500)))
 
+# Per-space minimum-overlap floors for the correlation behind `sos_distances` (SOS-pattern
+# similarity, used by the explorers' ordination and the grouping section below). The
+# geographic scan has ~18k cells, so a floor of ~8 shared occupied cells is defensible; the
+# environmental scan has only tens of PC bins, so its floor must be much smaller. Below the
+# floor `sos_distances` pins the pair at distance 1 rather than trusting a correlation fit
+# on a handful of cells - which is also what keeps disjoint pairs at the maximum.
+const MINOVERLAP_G = 8
+const MINOVERLAP_E = 3
+
 # The interactive entry point: the fan tree with the divergent nodes marked, next to the
-# parent/SOS/children panel. Each opens on its space's most divergent node (focal_e,
-# focal_g above). Click a node or a branch to show that node; hover for labels. The
-# Birds of the World images in bow_images/ are private and not in the repo: they are
-# used only if that folder is there.
+# SOS map and the two child clades' maps, and an ordination of the divergent nodes by
+# SOS-pattern similarity. Each opens on its space's most divergent node (focal_e, focal_g
+# above). Click a node or a branch on the tree, or a point in the ordination, to show that
+# node; hover for labels. The Birds of the World images in bow_images/ are private and not
+# in the repo: they are used only if that folder is there.
 imagedir = "bow_images/workshop_species"
 explorer_options = (; metric, images = isdir(imagedir) ? imagedir : nothing,
                     imageoptions = (; whitebackground = true))
-explorer_fig_e, explorer_e = nodeexplorer(birds_e, tree, res_e; nodes = divergent_e, explorer_options...)
-explorer_fig_g, explorer_g = nodeexplorer(birds_g, tree, res_g; nodes = divergent_g, explorer_options...)
+explorer_fig_e, explorer_e = nodeexplorer(birds_e, tree, res_e; nodes = divergent_e,
+                                          ordinationkw = (; minoverlap = MINOVERLAP_E), explorer_options...)
+explorer_fig_g, explorer_g = nodeexplorer(birds_g, tree, res_g; nodes = divergent_g,
+                                          ordinationkw = (; minoverlap = MINOVERLAP_G), explorer_options...)
 
 # Link the two: a node picked in one space is shown in the other too, if it has an SOS there
 for (from, to, res) in ((explorer_g, explorer_e, res_e), (explorer_e, explorer_g, res_g))
@@ -119,16 +131,10 @@ if isinteractive() && get(ENV, "NODIVWORKSHOP_WINDOWS", "true") != "false"
     display(GLMakie.Screen(), explorer_fig_g)
 end
 
-# ordinate the divergent nodes by SOS-pattern similarity (cached SOS -> distances
-# from Nodiv -> MDS; presentation stays here)
-function sos_mds_plot(res, nodes, title)
-    coords = predict(fit(MDS, sos_distances(res, nodes); distances = true, maxoutdim = 2))
-    fig, ax, _ = scatter(coords[1, :], coords[2, :];
-                         axis = (; xlabel = "MDS axis 1", ylabel = "MDS axis 2", title))
-    text!(ax, coords[1, :], coords[2, :]; text = nodes, fontsize = 8,
-          align = (:center, :bottom), offset = (0, 4))
-    fig
-end
+# ordinate the divergent nodes of both spaces by SOS-pattern similarity (cached SOS ->
+# `sos_distances` from Nodiv -> classical MDS in NodivMakie's `sosordination`)
+sos_mds_plot(res, nodes, title) =
+    ordinationplot(sosordination(res, nodes); nodelabels = true, axis = (; title)).figure
 mds_e = sos_mds_plot(res_e, divergent, "SOS-pattern similarity (environmental)")
 mds_g = sos_mds_plot(res_g, divergent, "SOS-pattern similarity (geographic)")
 
@@ -184,23 +190,17 @@ nodesizes_scatter = scatter([log(nodesizes[n]) for n in nodes], [g_metric[n] for
 ### tens of PC bins, geographic over ~18k cells).
 ### ===========================================================================
 
-using Clustering, Graphs, LinearAlgebra
+using Clustering, Graphs
 
-# Per-space minimum-overlap floors for the correlation's own sample size. The geographic
-# scan has ~18k cells, so a floor of ~8 shared occupied cells is defensible; the
-# environmental scan has only tens of PC bins, so its floor must be much smaller. Below the
-# floor `sos_distances` pins the pair at distance 1 rather than trusting a correlation fit
-# on a handful of cells - which is also what keeps disjoint pairs at the maximum.
-const MINOVERLAP_G = 8
-const MINOVERLAP_E = 3
+# The per-space minimum-overlap floors, MINOVERLAP_G and MINOVERLAP_E, are set above the
+# explorers.
 
 # (1) ONE-TIME DIAGNOSTIC, not the analysis. Fit MDS at a higher dimension and look at the
 # eigenvalue spectrum: if axes 3+ carry weight comparable to axes 1-2, the 2-D scatter above
 # is a projection artefact and the "ring" is the honest report of near-equidistance.
 function sos_mds_eigenvalues(res, nodes, title; minoverlap, method = :pearson)
-    D = sos_distances(res, nodes; minoverlap, method)
-    M = fit(MDS, D; distances = true, maxoutdim = min(10, length(nodes) - 1))
-    λ = eigvals(M)
+    λ = sosordination(res, nodes; minoverlap, method,
+                      maxoutdim = min(10, length(nodes) - 1)).eigenvalues
     fig, ax, _ = barplot(1:length(λ), λ;
                          axis = (; xlabel = "MDS axis", ylabel = "eigenvalue",
                                  title = "$title  (n = $(length(nodes)))"))
