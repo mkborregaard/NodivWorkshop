@@ -9,8 +9,9 @@
 
 using CSV, DataFrames, JLD2
 using MultivariateStats, Statistics, LogExpFunctions, GLM
+using SpatialEcology, Phylo, Nodiv
 import CairoMakie            # only for saving vector (PDF) files; GLMakie saves raster formats
-using GLMakie, NodivMakie    # NodivMakie re-exports Makie, Phylo, SpatialEcology and Nodiv
+using GLMakie, NodivMakie
 GLMakie.activate!()          # loading a backend activates it, so make sure GLMakie is the one
 
 set_theme!(colormap = Reverse(:Spectral))
