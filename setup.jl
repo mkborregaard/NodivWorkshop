@@ -70,6 +70,7 @@ function link_dir(sub, root)
         @warn "Could not create a symlink for `$sub`. On Windows this needs Developer Mode " *
             "or an elevated shell; otherwise create the link manually." exception = err
     end
+    return nothing
 end
 
 root = resolve_dataroot()

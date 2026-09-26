@@ -7,13 +7,23 @@
 # windows. Run it in the REPL or VS Code; each figure is kept in a variable, so evaluate
 # the variable to show it again.
 
-using CSV, DataFrames, JLD2
-using Statistics, LogExpFunctions, GLM, MultivariateStats, StatsFuns
-using Clustering, Graphs
-using SpatialEcology, Phylo, Nodiv
+using CSV
 # CairoMakie only for saving vector (PDF) files; GLMakie saves raster formats
 using CairoMakie: CairoMakie
-using GLMakie, NodivMakie
+using Clustering
+using DataFrames
+using GLM
+using GLMakie
+using Graphs: Graphs
+using JLD2
+using LogExpFunctions
+using MultivariateStats
+using Nodiv
+using NodivMakie
+using Phylo
+using SpatialEcology
+using Statistics
+using StatsFuns
 # Loading a backend activates it, so make sure GLMakie is the one
 GLMakie.activate!()
 
@@ -31,19 +41,19 @@ phylocom_g = strsite!(CSV.read("data/clean/phylocom_g.csv", DataFrame))
 coords_g = strsite!(CSV.read("data/clean/coords_g.csv", DataFrame))
 sitestats_g = CSV.read("data/clean/sitestats_g.csv", DataFrame)
 sitestats_g.ID_geo = string.(sitestats_g.ID_geo)
-traits = CSV.read("data/clean/traits.csv", DataFrame)
+avonet = CSV.read("data/clean/traits.csv", DataFrame)
 
 # coordinates were pre-aligned to each phylocom's site order in preprocessing, so
 # they slot straight into the Assemblage (SpatialEcology aligns coords by row order).
 birds_e = Assemblage(phylocom_e, coords_e)
 addsitestats!(birds_e, sitestats_e, :ID_env)   # PC bins, area, occupancy, ...
-addtraits!(birds_e, traits, :species)
+addtraits!(birds_e, avonet, :species)
 richness_e = mapfigure(birds_e; title="Environmental: species richness", label="species")
 # save("figures/Env species richness.png", richness_e)
 
 birds_g = Assemblage(phylocom_g, coords_g)
 addsitestats!(birds_g, sitestats_g, :ID_geo)   # CHELSA bioclim, PC1-3, area, ...
-addtraits!(birds_g, traits, :species)
+addtraits!(birds_g, avonet, :species)
 richness_g = mapfigure(
     birds_g;
     title="Geographic: species richness",
@@ -57,45 +67,45 @@ richness_g = mapfigure(
 # per-cell SOS they are built on. This is the slow part - randomisations over the whole
 # tree, and ~18k cells for the geographic scan - so cache it: re-running the script just
 # reloads the results and jumps straight to the plotting below.
-cachefile = "data/node_analysis.jld2"
-if !isfile(cachefile)
+const CACHEFILE = "data/node_analysis.jld2"
+if !isfile(CACHEFILE)
     res_e = node_metrics(birds_e, tree; nsims=200)
     res_g = node_metrics(birds_g, tree; nsims=200)
-    jldsave(cachefile; res_e, res_g)
+    jldsave(CACHEFILE; res_e, res_g)
 end
 # each a NodeMetrics: nodes (in tree order), gnd, rms, sd, ses, pval, varying and sos
-res_e, res_g = load(cachefile, "res_e", "res_g")
+res_e, res_g = load(CACHEFILE, "res_e", "res_g")
 
-metric = :rms # alternatives are :pval and :gnd
-threshold = 2
-metric_e = getfield(res_e, metric)
-metric_g = getfield(res_g, metric)
+const METRIC = :rms  # alternatives are :pval and :gnd
+const THRESHOLD = 2
+metric_e = getfield(res_e, METRIC)
+metric_g = getfield(res_g, METRIC)
 
 # Minimum number of shared occupied cells for the correlation behind `sos_distances`
 # (SOS-pattern similarity, used by the explorers' ordination and the grouping section).
 # Below it `sos_distances` pins the pair at distance 1 rather than trusting a correlation
 # fit on a handful of cells - which is also what keeps disjoint pairs at the maximum. 3 is
 # the smallest overlap where |r| is not trivially 1.
-MINOVERLAP = 3
-SIMCUT = 0.7
+const MINOVERLAP = 3
+const SIMCUT = 0.7
 
 ### ---- Exploratory plotting (from the cached NodeMetrics; `_e` vs `_g`) ----- ###
 
-# strongly divergent nodes in each space (`metric` above `threshold`)
-divergent_e = divergent_nodes(res_e; by=metric, threshold)
-divergent_g = divergent_nodes(res_g; by=metric, threshold)
+# Strongly divergent nodes in each space (`METRIC` above `THRESHOLD`)
+divergent_e = divergent_nodes(res_e; by=METRIC, threshold=THRESHOLD)
+divergent_g = divergent_nodes(res_g; by=METRIC, threshold=THRESHOLD)
 divergent = divergent_e ∩ divergent_g
 
 # The metric of just the divergent nodes mapped onto the tree (markers only at `nodes`:
 # a node missing from the Dict would get a transparent fill but still its outline).
 # GND is a proportion, so it gets a fixed 0-1 colour range, as plot_gnd used.
-function metric_tree(tree, values, nodes, title)
+function metric_tree(tree, nodevalues, nodes, title; metric)
     colorrange = metric === :gnd ? (0, 1) : Makie.automatic
     fig, ax, p = treeplot(
         tree;
         treetype=:fan,
         showtips=false,
-        nodecolor=Dict(n => values[n] for n in nodes),
+        nodecolor=Dict(n => nodevalues[n] for n in nodes),
         shownodes=nodes,
         markersize=8,
         strokewidth=0.5,
@@ -108,11 +118,11 @@ function metric_tree(tree, values, nodes, title)
     return fig
 end
 metric_tree_e = metric_tree(
-    tree, metric_e, divergent_e, "Environmental: divergent nodes, $metric"
+    tree, metric_e, divergent_e, "Environmental: divergent nodes, $METRIC"; metric=METRIC
 )
 # save("figures/Env divergent nodes treeplot.png", metric_tree_e)
 metric_tree_g = metric_tree(
-    tree, metric_g, divergent_g, "Geographic: divergent nodes, $metric"
+    tree, metric_g, divergent_g, "Geographic: divergent nodes, $METRIC"; metric=METRIC
 )
 # save("figures/Geo divergent nodes treeplot.png", metric_tree_g)
 
@@ -145,10 +155,10 @@ sosmap_g = mapfigure(
 # above). Click a node or a branch on the tree, or a point in the ordination, to show that
 # node; hover for labels. The Birds of the World images in bow_images/ are private and not
 # in the repo: they are used only if that folder is there.
-imagedir = "bow_images/workshop_species"
+const IMAGEDIR = "bow_images/workshop_species"
 explorer_options = (;
-    metric,
-    images=isdir(imagedir) ? imagedir : nothing,
+    metric=METRIC,
+    images=isdir(IMAGEDIR) ? IMAGEDIR : nothing,
     imageoptions=(; whitebackground=true),
     ordinationkw=(; minoverlap=MINOVERLAP),
 )
@@ -168,8 +178,9 @@ for (from, to, res) in ((explorer_g, explorer_e, res_e), (explorer_e, explorer_g
     end
 end
 
-# each explorer in its own window (NODIVWORKSHOP_WINDOWS=false skips this, e.g. headless)
-if isinteractive() && get(ENV, "NODIVWORKSHOP_WINDOWS", "true") != "false"
+# Each explorer in its own window (NODIVWORKSHOP_WINDOWS=false skips this, e.g. headless)
+const SHOW_WINDOWS = isinteractive() && get(ENV, "NODIVWORKSHOP_WINDOWS", "true") != "false"
+if SHOW_WINDOWS
     display(GLMakie.Screen(), explorer_fig_e)
     display(GLMakie.Screen(), explorer_fig_g)
 end
@@ -195,17 +206,17 @@ panel_g, _ = nodepanel(birds_g, tree, focal, res_g)
 # save("figures/Geo node panel $focal.png", panel_g)
 
 allnodes = collect(keys(metric_e))
-dat = DataFrame(
-    :log_g => [log(metric_g[n]) for n in allnodes], #NB logit or log, depends on metric
-    :log_e => [log(metric_e[n]) for n in allnodes],
+dat = DataFrame(;
+    log_g=[log(metric_g[n]) for n in allnodes],  # NB logit or log, depends on metric
+    log_e=[log(metric_e[n]) for n in allnodes],
 )
-dat = filter(row -> all(x -> !ismissing(x) && isfinite(x), row), dat)
+dat = filter(row -> all(isfinite, row), dat)
 
 metric_scatter = scatter(
-    dat.log_g, dat.log_e; axis=(; xlabel="log geo $metric", ylabel="log env $metric")
+    dat.log_g, dat.log_e; axis=(; xlabel="log geo $METRIC", ylabel="log env $METRIC")
 )
 ablines!(metric_scatter.axis, 0, 1; color=:red)   # the 1:1 line
-# save("figures/Env vs geo $metric.png", metric_scatter)
+# save("figures/Env vs geo $METRIC.png", metric_scatter)
 
 rms_fit = lm(@formula(log_e ~ log_g), dat)
 
@@ -232,17 +243,17 @@ end
 occupied_scatter = scatter(
     [occupied_e[n] for n in allnodes],
     [metric_e[n] for n in allnodes];
-    axis=(; xlabel="occupied env sites", ylabel="env $metric"),
+    axis=(; xlabel="occupied env sites", ylabel="env $METRIC"),
 )
-# save("figures/Env $metric vs occupied sites.png", occupied_scatter)
+# save("figures/Env $METRIC vs occupied sites.png", occupied_scatter)
 
 nspecies_g = Dict(node => nspecies(get_clade(birds_g, tree, node)) for node in allnodes)
 nspecies_scatter = scatter(
     [log(nspecies_g[n]) for n in allnodes],
     [metric_g[n] for n in allnodes];
-    axis=(; xlabel="log number of species in clade", ylabel="geo $metric"),
+    axis=(; xlabel="log number of species in clade", ylabel="geo $METRIC"),
 )
-# save("figures/Geo $metric vs clade species.png", nspecies_scatter)
+# save("figures/Geo $METRIC vs clade species.png", nspecies_scatter)
 
 ### ===========================================================================
 ### Grouping divergent nodes by SOS-pattern similarity
@@ -366,7 +377,7 @@ function sos_similarity_communities(D, nodes; simthresh)
     m == 0 && return (; communities=Vector{String}[], modularity=0.0)
     deg = Graphs.degree(g)
     while true
-        best, merge = 0.0, nothing
+        best, best_pair = 0.0, nothing
         for a in unique(comm), b in unique(comm)
             a < b || continue
             links = count(
@@ -375,10 +386,12 @@ function sos_similarity_communities(D, nodes; simthresh)
             )
             links == 0 && continue
             dQ = links / m - sum(deg[comm .== a]) * sum(deg[comm .== b]) / (2m^2)
-            dQ > best && ((best, merge) = (dQ, (a, b)))
+            if dQ > best
+                best, best_pair = dQ, (a, b)
+            end
         end
-        merge === nothing && break
-        comm[comm .== merge[2]] .= merge[1]
+        best_pair === nothing && break
+        comm[comm .== best_pair[2]] .= best_pair[1]
     end
     groups = filter(c -> length(c) > 1, [findall(==(c), comm) for c in unique(comm)])
     return (;
@@ -484,8 +497,8 @@ function traitpca(df; tol=0.01)
     return (; pca=fit(PCA, permutedims(Z); pratio=1), logged=names(df)[logged], z=Z)
 end
 
-speciestraits = SpatialEcology.traits(birds_g)
-trait_pca = traitpca(speciestraits[:, 11:21])
+speciestraits = traits(birds_g)
+trait_pca = traitpca(speciestraits[:, Between(:Beak_Length_Culmen, :Mass)])
 pca_explained = principalvars(trait_pca.pca) ./ var(trait_pca.pca)
 
 pcs = DataFrame(
@@ -555,7 +568,7 @@ end
 
 # Species => point in trait space, from the columns `x` and `y` of an assemblage's traits
 function traitpoints(asm, x, y)
-    t = SpatialEcology.traits(asm)
+    t = traits(asm)
     return Dict(zip(t.name, Point2d.(t[!, x], t[!, y])))
 end
 
@@ -595,12 +608,13 @@ end
 function traitexplorer(
     tree,
     marked,
-    values,
+    nodevalues,
     birds_g,
     res_g,
     birds_e,
     res_e,
     explained;
+    metric,
     images=nothing,
     imageoptions=(;),
 )
@@ -611,7 +625,7 @@ function traitexplorer(
         tree,
         node,
         marked;
-        values,
+        values=nodevalues,
         label="geo $metric",
         selectable=n -> hassos(tree, res_g.sos, n) && hassos(tree, res_e.sos, n),
         unselectable="no SOS in both spaces",
@@ -649,10 +663,11 @@ trait_fig, trait_explorer = traitexplorer(
     birds_e,
     res_e,
     pca_explained;
+    metric=METRIC,
     explorer_options.images,
     explorer_options.imageoptions,
 )
-if isinteractive() && get(ENV, "NODIVWORKSHOP_WINDOWS", "true") != "false"
+if SHOW_WINDOWS
     display(GLMakie.Screen(), trait_fig)
 end
 
@@ -661,10 +676,10 @@ trait_overlap = Dict(
     n => hulloverlap(convexhull.(childpoints(tree, n, pts12))...) for n in allnodes
 )
 
-overlap_dat = DataFrame(
-    :overlap => [trait_overlap[n] for n in allnodes],
-    :log_g => [log(metric_g[n]) for n in allnodes],
-    :log_e => [log(metric_e[n]) for n in allnodes],
+overlap_dat = DataFrame(;
+    overlap=[trait_overlap[n] for n in allnodes],
+    log_g=[log(metric_g[n]) for n in allnodes],
+    log_e=[log(metric_e[n]) for n in allnodes],
 )
 overlap_dat = filter(row -> all(isfinite, row), overlap_dat)
 overlap_fit_g = lm(@formula(log_g ~ overlap), overlap_dat)
@@ -672,14 +687,14 @@ overlap_fit_e = lm(@formula(log_e ~ overlap), overlap_dat)
 
 overlap_scatter = let fig = Figure(; size=(1100, 500))
     panels = (
-        (:log_g, overlap_fit_g, "Geographic: trait overlap and $metric"),
-        (:log_e, overlap_fit_e, "Environmental: trait overlap and $metric"),
+        (:log_g, overlap_fit_g, "Geographic: trait overlap and $METRIC"),
+        (:log_e, overlap_fit_e, "Environmental: trait overlap and $METRIC"),
     )
     for (col, (y, lmfit, title)) in enumerate(panels)
-        ax = Axis(fig[1, col]; title, xlabel="trait overlap (pca1-2)", ylabel="log $metric")
+        ax = Axis(fig[1, col]; title, xlabel="trait overlap (pca1-2)", ylabel="log $METRIC")
         scatter!(ax, overlap_dat.overlap, overlap_dat[!, y]; markersize=5)
         ablines!(ax, coef(lmfit)...; color=:red)
     end
     fig
 end
-# save("figures/Trait overlap vs $metric.png", overlap_scatter)
+# save("figures/Trait overlap vs $METRIC.png", overlap_scatter)

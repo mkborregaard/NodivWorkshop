@@ -8,10 +8,13 @@
 # Run this once (or whenever the raw data changes); it is the slow I/O step.
 # Needs R with the sf and ape packages.
 
-using CSV, DataFrames, Phylo, RCall
+using CSV
+using DataFrames
+using Phylo
+using RCall
 
-rdsfile = "data/data_birds_matched_simplified.rds"
-outdir = "data/clean"
+const RDSFILE = "data/data_birds_matched_simplified.rds"
+const OUTDIR = "data/clean"
 
 # The species names are already matched across tree, presences and traits in the
 # RDS; only swap spaces for underscores, as Newick tip labels need.
@@ -38,7 +41,7 @@ end
 # centroid falls - a clipped coastal cell's centroid still lies inside the cell.
 R"""
 suppressMessages({library(sf); library(ape)})
-x <- readRDS($rdsfile)
+x <- readRDS($RDSFILE)
 g <- x$g_space$grid_sf
 gb <- st_transform(st_geometry(g), "ESRI:54017")
 cellsize <- diff(sf_project("EPSG:4326", "ESRI:54017", rbind(c(0, 0), c(1, 0)))[, 1])
@@ -51,7 +54,8 @@ gdf$lon <- ll[, 1]
 gdf$lat <- ll[, 2]
 edf <- st_drop_geometry(x$e_space$grid_sf)
 tr <- x$phylogeny
-tr$node.label <- NULL                    # support values; Phylo rejects them as duplicate node names
+# support values; Phylo rejects them as duplicate node names
+tr$node.label <- NULL
 tr$tip.label <- gsub(" ", "_", tr$tip.label)
 """
 cellsize = rcopy(R"cellsize")
@@ -80,8 +84,9 @@ shared = intersect(
 )
 keeptips!(tree, shared)
 sort!(tree)
-filter!(r -> r.species in shared, phylocom_e)
-filter!(r -> r.species in shared, phylocom_g)
+sharedset = Set(shared)
+filter!(r -> r.species in sharedset, phylocom_e)
+filter!(r -> r.species in sharedset, phylocom_g)
 
 # coordinates: PC bin midpoints for env; Behrmann cell centres in km for geo
 coords_e = align_coords(
@@ -97,9 +102,9 @@ coords_g = align_coords(
 )
 
 ### Traits: one row per tree tip, keyed by `species` for addtraits!
-traits = rcopy(DataFrame, R"x$traits")
-traits = select(traits, :Species1 => ByRow(underscore) => :species, Not(:Species1))
-filter!(r -> r.species in shared, traits)
+avonet = rcopy(DataFrame, R"x$traits")
+avonet = select(avonet, :Species1 => ByRow(underscore) => :species, Not(:Species1))
+filter!(r -> r.species in sharedset, avonet)
 
 ### Name the internal nodes that are exactly a genus, family or order -----------
 # Round-trip the tree through ape's Newick first: that is the file script.jl used to
@@ -111,21 +116,24 @@ tree = parsenewick(rcopy(String, R"write.tree($tree)"))
 # species, rename its MRCA to the taxon if the taxon is monophyletic - its species
 # are exactly the tips below that node. Non-monophyletic taxa stay unnamed. Where one
 # clade is several taxa at once (e.g. a family of a single genus) the highest rank wins.
-function taxonnodes(tree, traits)
-    genus = String.(first.(split.(traits.species, "_")))
-    names = Dict{String,String}()
-    for taxa in (genus, traits.Family1, traits.Order1)   # low to high rank: higher overwrites
+function taxonnodes(tree, avonet)
+    genus = String.(first.(split.(avonet.species, "_")))
+    taxonnames = Dict{String,String}()
+    # Low to high rank: higher overwrites
+    for taxa in (genus, avonet.Family1, avonet.Order1)
         for taxon in unique(taxa)
-            sp = traits.species[taxa .== taxon]
+            sp = avonet.species[taxa .== taxon]
             length(sp) > 1 || continue
             node = getnodename(tree, mrca(tree, sp))
             ntips = count(n -> isleaf(tree, n), getdescendants(tree, node))
-            ntips == length(sp) && (names[node] = taxon)
+            if ntips == length(sp)
+                taxonnames[node] = taxon
+            end
         end
     end
-    return names
+    return taxonnames
 end
-for (node, taxon) in taxonnodes(tree, traits)
+for (node, taxon) in taxonnodes(tree, avonet)
     renamenode!(tree, node, taxon)
 end
 # ladderize (order each node's clades by size) for plotting. parsenewick does not keep
@@ -133,14 +141,14 @@ end
 sort!(tree)
 
 ### Write the cleaned inputs ---------------------------------------------------
-mkpath(outdir)
-CSV.write(joinpath(outdir, "phylocom_e.csv"), phylocom_e)
-CSV.write(joinpath(outdir, "coords_e.csv"), coords_e)
-CSV.write(joinpath(outdir, "sitestats_e.csv"), sitestats_e)
-CSV.write(joinpath(outdir, "phylocom_g.csv"), phylocom_g)
-CSV.write(joinpath(outdir, "coords_g.csv"), coords_g)
-CSV.write(joinpath(outdir, "sitestats_g.csv"), sitestats_g)
-CSV.write(joinpath(outdir, "traits.csv"), traits)
+mkpath(OUTDIR)
+CSV.write(joinpath(OUTDIR, "phylocom_e.csv"), phylocom_e)
+CSV.write(joinpath(OUTDIR, "coords_e.csv"), coords_e)
+CSV.write(joinpath(OUTDIR, "sitestats_e.csv"), sitestats_e)
+CSV.write(joinpath(OUTDIR, "phylocom_g.csv"), phylocom_g)
+CSV.write(joinpath(OUTDIR, "coords_g.csv"), coords_g)
+CSV.write(joinpath(OUTDIR, "sitestats_g.csv"), sitestats_g)
+CSV.write(joinpath(OUTDIR, "traits.csv"), avonet)
 # Phylo's own Newick writer keeps every internal node name, taxon or "Node N", so
 # re-reading the file gives back exactly these names.
-write(joinpath(outdir, "tree.nwk"), tree)
+write(joinpath(OUTDIR, "tree.nwk"), tree)
