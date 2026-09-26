@@ -65,7 +65,7 @@ Every figure is kept in a variable (`richness_g`, `metric_tree_e`, `heat_g`,
 `tree_clusters_e`, …). Evaluate one to show it. Below each figure is a commented-out
 `save("figures/…", fig)` line: uncomment it to write that figure. GLMakie writes raster
 formats; for vector files use `save("figures/name.pdf", fig; backend = CairoMakie)`. The
-(also commented-out) `plot_node_pdf` lines at the end write one multi-page PDF of node
+(also commented-out) `node_panel_pdf` lines at the end write one multi-page PDF of node
 panels per space, which needs `pdfunite` (poppler, `brew install poppler`).
 
 The interactive entry point is the **node explorer**, one per space

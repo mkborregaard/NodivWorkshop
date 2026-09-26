@@ -118,7 +118,7 @@ tree = parsenewick(rcopy(String, R"write.tree($tree)"))
 # species, rename its MRCA to the taxon if the taxon is monophyletic - its species
 # are exactly the tips below that node. Non-monophyletic taxa stay unnamed. Where one
 # clade is several taxa at once (e.g. a family of a single genus) the highest rank wins.
-function taxonnodes(tree, avonet)
+function taxon_nodes(tree, avonet)
     genus = String.(first.(split.(avonet.species, "_")))
     taxonnames = Dict{String,String}()
     # Low to high rank: higher overwrites
@@ -135,7 +135,7 @@ function taxonnodes(tree, avonet)
     end
     return taxonnames
 end
-for (node, taxon) in taxonnodes(tree, avonet)
+for (node, taxon) in taxon_nodes(tree, avonet)
     renamenode!(tree, node, taxon)
 end
 # Ladderize (order each node's clades by size) for plotting. parsenewick does not keep

@@ -1,45 +1,45 @@
 """
-    strsite!(df)
+    string_sites!(df)
 
 Convert the `site` column of `df` to strings, so site ids read by CSV stay strings.
 Returns `df`.
 """
-function strsite!(df)
+function string_sites!(df)
     df.site = string.(df.site)
     return df
 end
 
 """
-    mapfigure(args...; title="", label="", kw...)
+    map_figure(args...; title="", label="", kw...)
 
 A map of one value per site (`sitemap(args...)`), with a colour bar labelled `label` beside
 it. Other keywords go to `sitemap`. Returns the figure.
 """
-function mapfigure(args...; title="", label="", kw...)
+function map_figure(args...; title="", label="", kw...)
     fig, ax, p = sitemap(args...; axis=(; title), kw...)
     Colorbar(fig[1, 2], p; label)
     return fig
 end
 
 """
-    cluster_idmap(groups)
+    cluster_id_map(groups)
 
 The clusters worth showing: the cut clusters of `groups` with more than one node,
 relabelled 1..m in the order of their `cutree` ids, as a `Dict` from cluster id to label.
 The heatmap and the tree both number and colour the clusters by this, so the two views
 cross-reference directly.
 """
-function cluster_idmap(groups)
+function cluster_id_map(groups)
     ids = sort(collect(keys(sos_cluster_sizes(groups).members)))
     return Dict(c => i for (i, c) in enumerate(ids))
 end
 
 """
-    clustercolors(m)
+    cluster_colors(m)
 
 `m` colours for the labelled clusters, cycling through the `:tab20` colormap.
 """
-function clustercolors(m)
+function cluster_colors(m)
     c = Makie.to_colormap(:tab20)
     return [c[mod1(i, length(c))] for i in 1:m]
 end
@@ -66,23 +66,23 @@ function sos_cluster_sizes(groups)
 end
 
 """
-    plot_cluster_tree(tree, groups, title; markersize=12, kw...)
+    cluster_tree(tree, groups, title; markersize=12, kw...)
 
 Map the heatmap clusters onto the phylogeny: a marker at each node of a non-trivial cluster
 (size > 1), one colour per cluster, and nothing elsewhere, so the co-patterned groups stand
 out against the tree; idiosyncratic singletons are left unmarked. `groups` is the Dict from
 `sos_clusters`. The cluster numbers and colours are those outlined on the heatmap
-(`cluster_idmap`). Other keywords go to `treeplot`. Returns the figure.
+(`cluster_id_map`). Other keywords go to `treeplot`. Returns the figure.
 """
-function plot_cluster_tree(tree, groups, title; markersize=12, kw...)
-    idmap = cluster_idmap(groups)
+function cluster_tree(tree, groups, title; markersize=12, kw...)
+    idmap = cluster_id_map(groups)
     shown = Dict(n => idmap[c] for (n, c) in groups if haskey(idmap, c))
     fig, ax, p = treeplot(
         tree;
         treetype=:fan,
         showtips=false,
         nodegroup=shown,
-        groupcolors=clustercolors(length(idmap)),
+        groupcolors=cluster_colors(length(idmap)),
         markersize,
         strokewidth=0.5,
         strokecolor=:gray30,
@@ -95,7 +95,7 @@ function plot_cluster_tree(tree, groups, title; markersize=12, kw...)
 end
 
 """
-    plot_node_pdf(assemblage, tree, nodes, res, outfile)
+    node_panel_pdf(assemblage, tree, nodes, res, outfile)
 
 Write one 4-panel node panel (parent / SOS / child 1 / child 2) per node of `nodes` to
 `outfile`, a single multi-page PDF with one node per page. The SOS panel comes from the
@@ -105,10 +105,10 @@ The panel is built once and switched from node to node; each page is saved with 
 (GLMakie cannot write PDF) and the pages merged with `pdfunite`, from poppler, which must
 be on the PATH.
 """
-function plot_node_pdf(assemblage, tree, nodes, res, outfile)
+function node_panel_pdf(assemblage, tree, nodes, res, outfile)
     if Sys.which("pdfunite") === nothing
         error(
-            "plot_node_pdf needs `pdfunite` (poppler) on PATH, e.g. `brew install poppler`"
+            "node_panel_pdf needs `pdfunite` (poppler) on PATH, e.g. `brew install poppler`"
         )
     end
     tmp = mktempdir()

@@ -27,7 +27,7 @@ const REPO = @__DIR__
 
 # Bounded, macOS-only probe of Google Drive for desktop. No deep walk: it only looks
 # where the shared folder actually lives, so it never traverses the whole Drive.
-function autodiscover()
+function auto_discover()
     cs = joinpath(homedir(), "Library", "CloudStorage")
     isdir(cs) || return nothing
     tail = joinpath("EnvSpace_Workshop", "Nodiv project data", "NodivWorkshop")
@@ -46,10 +46,10 @@ function autodiscover()
     return nothing
 end
 
-function resolve_dataroot()
+function resolve_data_root()
     !isempty(ARGS) && return ARGS[1]
     haskey(ENV, "NODIVWORKSHOP_DATA") && return ENV["NODIVWORKSHOP_DATA"]
-    d = autodiscover()
+    d = auto_discover()
     d === nothing && error("""
         Could not locate the shared data folder automatically.
         Pass it explicitly (the folder that contains `data/` and `figures/`):
@@ -76,7 +76,7 @@ function link_dir(sub, root)
     return nothing
 end
 
-root = resolve_dataroot()
+root = resolve_data_root()
 isdir(joinpath(root, "data")) || error("No `data/` under $root — is that the right folder?")
 println("Data folder: $root")
 for sub in ("data", "figures")

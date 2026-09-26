@@ -34,11 +34,11 @@ set_theme!(; colormap=Reverse(:Spectral))
 ### ---- Load the cleaned inputs (from preprocess.jl) and build the assemblages ---- ###
 
 tree = sort!(parsenewick(read("data/clean/tree.nwk", String)))
-phylocom_e = strsite!(CSV.read("data/clean/phylocom_e.csv", DataFrame))
-coords_e = strsite!(CSV.read("data/clean/coords_e.csv", DataFrame))
+phylocom_e = string_sites!(CSV.read("data/clean/phylocom_e.csv", DataFrame))
+coords_e = string_sites!(CSV.read("data/clean/coords_e.csv", DataFrame))
 sitestats_e = CSV.read("data/clean/sitestats_e.csv", DataFrame)
-phylocom_g = strsite!(CSV.read("data/clean/phylocom_g.csv", DataFrame))
-coords_g = strsite!(CSV.read("data/clean/coords_g.csv", DataFrame))
+phylocom_g = string_sites!(CSV.read("data/clean/phylocom_g.csv", DataFrame))
+coords_g = string_sites!(CSV.read("data/clean/coords_g.csv", DataFrame))
 sitestats_g = CSV.read("data/clean/sitestats_g.csv", DataFrame)
 sitestats_g.ID_geo = string.(sitestats_g.ID_geo)
 avonet = CSV.read("data/clean/traits.csv", DataFrame)
@@ -48,13 +48,13 @@ avonet = CSV.read("data/clean/traits.csv", DataFrame)
 birds_e = Assemblage(phylocom_e, coords_e)
 addsitestats!(birds_e, sitestats_e, :ID_env)   # PC bins, area, occupancy, ...
 addtraits!(birds_e, avonet, :species)
-richness_e = mapfigure(birds_e; title="Environmental: species richness", label="species")
+richness_e = map_figure(birds_e; title="Environmental: species richness", label="species")
 # save("figures/Env species richness.png", richness_e)
 
 birds_g = Assemblage(phylocom_g, coords_g)
 addsitestats!(birds_g, sitestats_g, :ID_geo)   # CHELSA bioclim, PC1-3, area, ...
 addtraits!(birds_g, avonet, :species)
-richness_g = mapfigure(
+richness_g = map_figure(
     birds_g;
     title="Geographic: species richness",
     label="species",
@@ -128,7 +128,7 @@ metric_tree_g = metric_tree(
 
 # SOS of the most divergent node mapped onto each space (cached SOS, no recompute)
 focal_e = argmax(n -> metric_e[n], divergent_e)
-sosmap_e = mapfigure(
+sosmap_e = map_figure(
     res_e.sos[focal_e],
     birds_e;
     colormap=:RdYlBu,
@@ -138,7 +138,7 @@ sosmap_e = mapfigure(
 )
 # save("figures/Env SOS $focal_e.png", sosmap_e)
 focal_g = argmax(n -> metric_g[n], divergent_g)
-sosmap_g = mapfigure(
+sosmap_g = map_figure(
     res_g.sos[focal_g],
     birds_g;
     colormap=:RdYlBu,
@@ -189,12 +189,12 @@ end
 # `sos_distances` from Nodiv -> classical MDS in NodivMakie's `sosordination`)
 D_g = sos_distances(res_g, divergent; minoverlap=MINOVERLAP)
 D_e = sos_distances(res_e, divergent; minoverlap=MINOVERLAP)
-function sos_mds_plot(D, nodes, title)
+function sos_mds_scatter(D, nodes, title)
     return ordinationplot(sosordination(D, nodes); nodelabels=true, axis=(; title)).figure
 end
-mds_e = sos_mds_plot(D_e, divergent, "Environmental: SOS-pattern similarity")
+mds_e = sos_mds_scatter(D_e, divergent, "Environmental: SOS-pattern similarity")
 # save("figures/Env SOS-pattern similarity.png", mds_e)
-mds_g = sos_mds_plot(D_g, divergent, "Geographic: SOS-pattern similarity")
+mds_g = sos_mds_scatter(D_g, divergent, "Geographic: SOS-pattern similarity")
 # save("figures/Geo SOS-pattern similarity.png", mds_g)
 
 # Parent/SOS/children panel for one node (4th arg = cached SOS, no recompute); also
@@ -257,7 +257,7 @@ nspecies_scatter = scatter(
 # save("figures/Geo $METRIC vs clade species.png", nspecies_scatter)
 
 ### ---- Grouping divergent nodes by SOS-pattern similarity ---- ###
-# The MDS scatter (`sos_mds_plot`) above is read together with its eigenvalue diagnostic
+# The MDS scatter (`sos_mds_scatter`) above is read together with its eigenvalue diagnostic
 # (1); the primary read is the complete-linkage clustered heatmap (2), with a thresholded
 # similarity graph (3) as the confirmatory secondary. Distances come from `sos_distances`
 # in Nodiv: 1 - |r| over the shared occupied cells, with the minimum-overlap floor
@@ -285,7 +285,7 @@ end
 # negative x, so the ticks show them as positive. The heatmap's y labels print in the gap
 # between the two panels, so every dendrogram tip can be read straight off as a node name.
 # The x-axis carries the same names (rotated). The cut clusters with more than one node are
-# outlined on the diagonal with their number and colour from `plot_cluster_tree`. Tune
+# outlined on the diagonal with their number and colour from `cluster_tree`. Tune
 # `labelsize`/`figsize` for iterative exploration. The leaf order, bottom-to-top, shown on
 # the axes is `nodes[hc.order]`.
 function sos_cluster_heatmap(D, nodes, hc, groups, title; labelsize=9, figsize=(1300, 1150))
@@ -328,8 +328,8 @@ function sos_cluster_heatmap(D, nodes, hc, groups, title; labelsize=9, figsize=(
     h = heatmap!(hm, 1:n, 1:n, S; colormap=:viridis, colorrange=(0, 1))
     Colorbar(fig[1, 3], h; label="|r|")
 
-    idmap = cluster_idmap(groups)
-    colors = clustercolors(length(idmap))
+    idmap = cluster_id_map(groups)
+    colors = cluster_colors(length(idmap))
     for (c, i) in idmap  # Cutree clusters are contiguous in `ord`
         rows = findall(==(c), grp)
         lo, hi = extrema(rows)
@@ -401,7 +401,7 @@ end
 
 function print_clusters(space, groups, communities)
     sizes = sos_cluster_sizes(groups)
-    idmap = cluster_idmap(groups)
+    idmap = cluster_id_map(groups)
     println("$space: $(sizes.nclusters) clusters, $(sizes.nsingletons) singletons")
     for (c, i) in sort(collect(idmap); by=last)
         println("  cluster $i: ", join(sizes.members[c], ", "))
@@ -439,11 +439,9 @@ communities_g = sos_similarity_communities(D_g, divergent; simthresh=SIMCUT)
 communities_e = sos_similarity_communities(D_e, divergent; simthresh=SIMCUT)
 
 # Clusters mapped back onto the phylogeny (numbers and colours match the heatmap outlines)
-tree_clusters_g = plot_cluster_tree(
-    tree, groups_g, "Geographic: SOS clusters on the phylogeny"
-)
+tree_clusters_g = cluster_tree(tree, groups_g, "Geographic: SOS clusters on the phylogeny")
 # save("figures/Geo SOS clusters on the phylogeny.png", tree_clusters_g)
-tree_clusters_e = plot_cluster_tree(
+tree_clusters_e = cluster_tree(
     tree, groups_e, "Environmental: SOS clusters on the phylogeny"
 )
 # save("figures/Env SOS clusters on the phylogeny.png", tree_clusters_e)
@@ -474,8 +472,8 @@ divergent_tree = treeplot(
     figure=(; size=(1600, 1600)),
 ).figure
 # save("figures/Divergent nodes labelled.png", divergent_tree)
-# plot_node_pdf(birds_g, tree, divergent, res_g, "figures/divergent_node_panels_geo.pdf")
-# plot_node_pdf(birds_e, tree, divergent, res_e, "figures/divergent_node_panels_env.pdf")
+# node_panel_pdf(birds_g, tree, divergent, res_g, "figures/divergent_node_panels_geo.pdf")
+# node_panel_pdf(birds_e, tree, divergent, res_e, "figures/divergent_node_panels_env.pdf")
 
 ### ---- Traits: PCA of the AVONET morphometrics ---- ###
 
@@ -489,7 +487,7 @@ end
 # PCA of the columns of `df`: a column is logged where that raises its W' by more than
 # `tol`, then all are z-transformed. Returns the PCA, the logged columns and the
 # z-transformed matrix (species x traits) it was fit on.
-function traitpca(df; tol=0.01)
+function trait_pca(df; tol=0.01)
     X = Matrix{Float64}(df)
     logged = [all(>(0), x) && normality(log.(x)) - normality(x) > tol for x in eachcol(X)]
     X[:, logged] .= log.(X[:, logged])
@@ -498,11 +496,11 @@ function traitpca(df; tol=0.01)
 end
 
 speciestraits = traits(birds_g)
-trait_pca = traitpca(speciestraits[:, Between(:Beak_Length_Culmen, :Mass)])
-pca_explained = principalvars(trait_pca.pca) ./ var(trait_pca.pca)
+trait_pca_fit = trait_pca(speciestraits[:, Between(:Beak_Length_Culmen, :Mass)])
+pca_explained = principalvars(trait_pca_fit.pca) ./ var(trait_pca_fit.pca)
 
 pcs = DataFrame(
-    permutedims(predict(trait_pca.pca, permutedims(trait_pca.z))[1:4, :]),
+    permutedims(predict(trait_pca_fit.pca, permutedims(trait_pca_fit.z))[1:4, :]),
     ["pca$i" for i in 1:4],
 )
 pcs.species = speciestraits.name
@@ -513,7 +511,7 @@ cross2(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
 
 # Convex hull of 2-d points (Andrew's monotone chain), counter-clockwise, first point not
 # repeated
-function convexhull(pts)
+function convex_hull(pts)
     ps = sort(unique(pts); by=p -> (p[1], p[2]))
     length(ps) < 3 && return ps
     function half(ps)
@@ -530,7 +528,7 @@ function convexhull(pts)
     return [lower[1:(end - 1)]; upper[1:(end - 1)]]
 end
 
-function polyarea(h)
+function polygon_area(h)
     n = length(h)
     n < 3 && return 0.0
     return abs(
@@ -539,7 +537,7 @@ function polyarea(h)
 end
 
 # The intersection of two convex polygons (Sutherland-Hodgman: clip `a` by each edge of `b`)
-function clippolygon(a, b)
+function clip_polygon(a, b)
     out = a
     for i in eachindex(b)
         isempty(out) && break
@@ -562,59 +560,60 @@ end
 
 # The overlap of two convex hulls as a proportion of the smaller one; NaN if either has no
 # area
-function hulloverlap(h1, h2)
-    a = min(polyarea(h1), polyarea(h2))
+function hull_overlap(h1, h2)
+    a = min(polygon_area(h1), polygon_area(h2))
     a > 0 || return NaN
-    return polyarea(clippolygon(h1, h2)) / a
+    return polygon_area(clip_polygon(h1, h2)) / a
 end
 
 # Species => point in trait space, from the columns `x` and `y` of an assemblage's traits
-function traitpoints(asm, x, y)
+function trait_points(asm, x, y)
     t = traits(asm)
     return Dict(zip(t.name, Point2d.(t[!, x], t[!, y])))
 end
 
 # The trait-space points of the species of each of `node`'s two child clades
-function childpoints(tree, node, pts)
+function child_points(tree, node, pts)
     return [
         [pts[sp] for sp in nodespecies(tree, getnodename(tree, c)) if haskey(pts, sp)] for
         c in getchildren(tree, node)[1:2]
     ]
 end
 
-function closedhull(pts)
-    h = convexhull(pts)
+function closed_hull(pts)
+    h = convex_hull(pts)
     return length(h) < 3 ? Point2d[] : [h; h[1:1]]
 end
 
 # All species in trait space in grey, with the two child clades of `node` (an Observable) in
 # the explorer's clade colours, the smaller clade on top, each outlined by its convex hull
-function traitpanel!(gp, asm, tree, node, x, y; axis=(;))
-    pts = traitpoints(asm, x, y)
+function trait_panel!(gp, asm, tree, node, x, y; axis=(;))
+    pts = trait_points(asm, x, y)
     colors = cladecolors(:RdYlBu)
     ax = Axis(gp; xgridvisible=false, ygridvisible=false, axis...)
     scatter!(ax, collect(values(pts)); color=:gray80, markersize=3, inspectable=false)
-    clades = lift(n -> childpoints(tree, n, pts), node)
+    clades = lift(n -> child_points(tree, n, pts), node)
     for (k, color) in enumerate(colors)
         cladepts = lift(c -> c[k], clades)
         sc = scatter!(ax, cladepts; color, markersize=5, inspectable=false)
         on(c -> translate!(sc, 0, 0, length(c[k]) <= length(c[3 - k])), clades; update=true)
-        hull = lines!(ax, lift(closedhull, cladepts); color, linewidth=2, inspectable=false)
+        hull = lines!(
+            ax, lift(closed_hull, cladepts); color, linewidth=2, inspectable=false
+        )
         translate!(hull, 0, 0, 2)
     end
     return ax
 end
 
 # A node explorer of the two spaces and trait space: the tree, the SOS of the node shown in
-# geographic and environmental space, and its two child clades on PCA axes 1-2 and 3-4
-function traitexplorer(
+# geographic and environmental space, and its two child clades on PCA axes 1-2 and 3-4.
+# Each space is passed as an (assemblage, NodeMetrics) pair.
+function trait_explorer(
     tree,
     marked,
     nodevalues,
-    birds_g,
-    res_g,
-    birds_e,
-    res_e,
+    (birds_g, res_g),
+    (birds_e, res_e),
     explained;
     metric,
     images=nothing,
@@ -638,16 +637,16 @@ function traitexplorer(
     panels = fig[1, 2] = GridLayout()
     sosmap!(panels[1, 1], birds_g, node, res_g; title="Geographic SOS")
     sosmap!(panels[1, 2], birds_e, node, res_e; title="Environmental SOS")
-    pclabel(i) = "pca$i ($(round(100explained[i]; digits = 1))%)"
+    pc_label(i) = "pca$i ($(round(100explained[i]; digits = 1))%)"
     for (col, (i, j)) in enumerate(((1, 2), (3, 4)))
-        traitpanel!(
+        trait_panel!(
             panels[2, col],
             birds_g,
             tree,
             node,
             Symbol("pca$i"),
             Symbol("pca$j");
-            axis=(; xlabel=pclabel(i), ylabel=pclabel(j)),
+            axis=(; xlabel=pc_label(i), ylabel=pc_label(j)),
         )
     end
     colsize!(fig.layout, 1, Relative(0.45))
@@ -656,14 +655,12 @@ function traitexplorer(
 end
 
 trait_marked = Dict(n => metric_g[n] for n in divergent_e ∪ divergent_g)
-trait_fig, trait_explorer = traitexplorer(
+trait_fig, trait_explorer_tree = trait_explorer(
     tree,
     trait_marked,
     metric_g,
-    birds_g,
-    res_g,
-    birds_e,
-    res_e,
+    (birds_g, res_g),
+    (birds_e, res_e),
     pca_explained;
     metric=METRIC,
     explorer_options.images,
@@ -673,9 +670,9 @@ if SHOW_WINDOWS
     display(GLMakie.Screen(), trait_fig)
 end
 
-pts12 = traitpoints(birds_g, :pca1, :pca2)
+pts12 = trait_points(birds_g, :pca1, :pca2)
 trait_overlap = Dict(
-    n => hulloverlap(convexhull.(childpoints(tree, n, pts12))...) for n in allnodes
+    n => hull_overlap(convex_hull.(child_points(tree, n, pts12))...) for n in allnodes
 )
 
 overlap_dat = DataFrame(;
