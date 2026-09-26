@@ -7,7 +7,7 @@
 # windows. Run it in the REPL or VS Code; each figure is kept in a variable, so evaluate
 # the variable to show it again.
 
-using CSV, DataFrames, JLD2
+using CSV, DataFrames, JLD2, Random
 using Statistics, LogExpFunctions, GLM, MultivariateStats, StatsFuns
 using Clustering, Graphs
 using SpatialEcology, Phylo, Nodiv
@@ -50,14 +50,16 @@ richness_g = mapfigure(birds_g; title = "Geographic: species richness", label = 
 # `node_metrics` computes the divergence metrics (GND, RMS-SOS, ...) together with the
 # per-cell SOS they are built on. This is the slow part - randomisations over the whole
 # tree, and ~18k cells for the geographic scan - so cache it: re-running the script just
-# reloads the results and jumps straight to the plotting below.
+# reloads the results and jumps straight to the plotting below. The seeded `rng` makes a
+# regenerated cache identical to this one, whatever the number of threads (`julia -t auto`).
 cachefile = "data/node_analysis.jld2"
 if !isfile(cachefile)
-    res_e = node_metrics(birds_e, tree; nsims = 200)
-    res_g = node_metrics(birds_g, tree; nsims = 200)
+    res_e = node_metrics(birds_e, tree; nsims = 200, rng = Xoshiro(1))
+    res_g = node_metrics(birds_g, tree; nsims = 200, rng = Xoshiro(2))
     jldsave(cachefile; res_e, res_g)
 end
-res_e, res_g = load(cachefile, "res_e", "res_g")   # each a NodeMetrics (gnd/rms/spatial/ses/pval + sos)
+# each a NodeMetrics: nodes (in tree order), gnd, rms, sd, ses, pval, varying and sos
+res_e, res_g = load(cachefile, "res_e", "res_g")
 
 metric = :rms # alternatives are :pval and :gnd
 threshold = 2

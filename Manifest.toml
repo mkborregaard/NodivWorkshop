@@ -335,11 +335,11 @@ weakdeps = ["SpecialFunctions"]
     SpecialFunctionsExt = "SpecialFunctions"
 
 [[deps.Colors]]
-deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
-git-tree-sha1 = "37ea44092930b1811e666c3bc38065d7d87fcc74"
+deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "Reexport"]
+git-tree-sha1 = "291665b547f137df070e4dd83e432b5fee8cc4a0"
 registries = "General"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
-version = "0.13.1"
+version = "0.13.2"
 
 [[deps.CommonSolve]]
 deps = ["PrecompileTools"]
@@ -540,16 +540,18 @@ version = "1.7.0"
 
 [[deps.Durations]]
 deps = ["Dates"]
-git-tree-sha1 = "a2f9c974a78a23661f0e41d0b80b687f844c018e"
+git-tree-sha1 = "3ee876cefb64437469fdc5277802d8b553513546"
 registries = "General"
 uuid = "41ac09f5-0a95-4810-aa18-c88bf48ee130"
-version = "1.2.0"
+version = "1.4.0"
 
     [deps.Durations.extensions]
     DurationsArrowExt = "Arrow"
+    DurationsTimeZonesExt = "TimeZones"
 
     [deps.Durations.weakdeps]
     Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
+    TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 
 [[deps.EarCut_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1200,10 +1202,10 @@ version = "1.13.0"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "bba2d9aa057d8f126415de240573e86a8f39d2a1"
+git-tree-sha1 = "b85e2797b2409570e84c4de46238c0ed5f6476ae"
 registries = "General"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "1.0.1"
+version = "1.0.2"
 
     [deps.LogExpFunctions.extensions]
     LogExpFunctionsChainRulesCoreExt = "ChainRulesCore"
@@ -1332,15 +1334,15 @@ uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.3.0"
 
 [[deps.Nodiv]]
-deps = ["Phylo", "ProgressLogging", "Random", "RecipesBase", "SpatialEcology", "Statistics", "StatsBase"]
-git-tree-sha1 = "2917aeb72666f02f2fe6378d7530a5457dff3cc8"
+deps = ["Phylo", "Random", "RecipesBase", "SpatialEcology", "Statistics", "StatsBase"]
+git-tree-sha1 = "5de4aa8aa0ea321532fd1d3add98f17cd0da6aed"
 registries = "General"
 uuid = "6a6d1b09-ff88-4671-a19a-d516f2482c79"
-version = "0.1.1"
+version = "0.2.0"
 
 [[deps.NodivMakie]]
 deps = ["ColorTypes", "EcoBase", "FileIO", "ImageIO", "Makie", "MultivariateStats", "Nodiv", "Phylo", "Reexport", "SparseArrays", "SpatialEcology"]
-git-tree-sha1 = "cc03ba66b47d9f7c52675c0670617a1e92a0bdaf"
+git-tree-sha1 = "458e118afef697ff240b9c99aaf54eaf181d0c16"
 repo-rev = "main"
 repo-url = "https://github.com/mkborregaard/NodivMakie.jl"
 uuid = "6e5bb3f3-9e99-4721-b096-016fa2d2f487"
@@ -1582,13 +1584,6 @@ deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 version = "1.11.0"
 
-[[deps.ProgressLogging]]
-deps = ["Logging", "SHA", "UUIDs"]
-git-tree-sha1 = "f0803bc1171e455a04124affa9c21bba5ac4db32"
-registries = "General"
-uuid = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
-version = "0.1.6"
-
 [[deps.ProgressMeter]]
 deps = ["Distributed", "Printf"]
 git-tree-sha1 = "fbb92c6c56b34e1a2c4c36058f68f332bec840e7"
@@ -1645,10 +1640,10 @@ version = "1.11.0"
 
 [[deps.RandomBooleanMatrices]]
 deps = ["Random", "RandomNumbers", "SparseArrays", "StatsBase"]
-git-tree-sha1 = "eaa54cab9bcacd73a99d3412c0e6cad71bf90f72"
+git-tree-sha1 = "5a5fdb0cbac01dbafb20b6d9c23cc8c9b8761403"
 registries = "General"
 uuid = "9ae346a0-3d16-5633-ad70-ddb60ab77eac"
-version = "0.1.2"
+version = "0.2.0"
 
 [[deps.RandomNumbers]]
 deps = ["Random"]
@@ -1837,10 +1832,10 @@ version = "1.13.0"
 
 [[deps.SpatialEcology]]
 deps = ["DataFrames", "DataFramesMeta", "Distances", "EcoBase", "Random", "RandomBooleanMatrices", "RandomNumbers", "RecipesBase", "SparseArrays", "Statistics", "StatsBase"]
-git-tree-sha1 = "5071da3134b9269059a7ae5e4c741ebad2a113e2"
+git-tree-sha1 = "b12ddfd90b3ff02698fee4501d654a0b73b71e3d"
 registries = "General"
 uuid = "348f2d5d-71a3-5ad4-b565-8af070f99681"
-version = "0.11.1"
+version = "0.11.2"
 
     [deps.SpatialEcology.extensions]
     RastersExt = "Rasters"
