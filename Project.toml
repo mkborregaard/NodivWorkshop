@@ -1,11 +1,11 @@
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-Clustering = "aaaa29a8-35af-508c-8bc3-b662a17a0fe5"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 GLM = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
-Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
+GeoInterface = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
+GeometryOps = "3251bfac-6a57-4b6d-aa61-ac1fef2975ab"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LogExpFunctions = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
 MultivariateStats = "6f286f6a-111f-5878-ab1e-185364afe411"

@@ -5,10 +5,14 @@ node-based SOS/GND analysis of birds in environmental and geographic space.
 `preprocess.jl` prepares the inputs. `script.jl` is worked through interactively, a line or
 block at a time and not necessarily in order; it is not meant to be run top to bottom.
 Helper functions that are finished live in `functions.jl`, which the script `include`s;
-functions still being developed stay in the script. All plotting is done with
+functions still being developed stay in the script. Once finished, general analysis code
+moves to Nodiv and general plotting code to NodivMakie; only what is specific to this
+data (e.g. the traits and the taxon names of nodes) stays here. All plotting is done with
 [Makie](https://docs.makie.org), through
-[NodivMakie.jl](https://github.com/mkborregaard/NodivMakie.jl) for the trees, maps and
-node panels, with GLMakie for interactive windows.
+[NodivMakie.jl](https://github.com/mkborregaard/NodivMakie.jl) for the trees, maps, node
+panels and cluster figures, with GLMakie for interactive windows.
+`docs/sos_pattern_grouping_design.md` is the design spec for grouping the divergent nodes
+by SOS-pattern similarity.
 
 ## Data lives in Google Drive, not in git
 
@@ -65,7 +69,7 @@ Every figure is kept in a variable (`richness_g`, `metric_tree_e`, `heat_g`,
 `tree_clusters_e`, …). Evaluate one to show it. Below each figure is a commented-out
 `save("figures/…", fig)` line: uncomment it to write that figure. GLMakie writes raster
 formats; for vector files use `save("figures/name.pdf", fig; backend = CairoMakie)`. The
-(also commented-out) `node_panel_pdf` lines at the end write one multi-page PDF of node
+(also commented-out) `node_panel_pdf` calls at the end write one multi-page PDF of node
 panels per space, which needs `pdfunite` (poppler, `brew install poppler`).
 
 The interactive entry point is the **node explorer**, one per space

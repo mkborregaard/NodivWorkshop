@@ -10,11 +10,11 @@
 using CSV
 # CairoMakie only for saving vector (PDF) files; GLMakie saves raster formats
 using CairoMakie: CairoMakie
-using Clustering
 using DataFrames
 using GLM
 using GLMakie
-using Graphs: Graphs
+using GeoInterface: GeoInterface
+using GeometryOps: GeometryOps
 using JLD2
 using LogExpFunctions
 using MultivariateStats
@@ -99,30 +99,20 @@ divergent = divergent_e ∩ divergent_g
 # The metric of just the divergent nodes mapped onto the tree (markers only at `nodes`:
 # a node missing from the Dict would get a transparent fill but still its outline).
 # GND is a proportion, so it gets a fixed 0-1 colour range, as plot_gnd used.
-function metric_tree(tree, nodevalues, nodes, title; metric)
-    colorrange = metric === :gnd ? (0, 1) : Makie.automatic
-    fig, ax, p = treeplot(
-        tree;
-        treetype=:fan,
-        showtips=false,
-        nodecolor=Dict(n => nodevalues[n] for n in nodes),
-        shownodes=nodes,
-        markersize=8,
-        strokewidth=0.5,
-        colormap=:YlOrRd,
-        colorrange,
-        axis=(; title),
-        figure=(; size=(800, 700)),
-    )
-    Colorbar(fig[1, 2], p; label=string(metric))
-    return fig
-end
 metric_tree_e = metric_tree(
-    tree, metric_e, divergent_e, "Environmental: divergent nodes, $METRIC"; metric=METRIC
+    tree,
+    res_e;
+    metric=METRIC,
+    nodes=divergent_e,
+    title="Environmental: divergent nodes, $METRIC",
 )
 # save("figures/Env divergent nodes treeplot.png", metric_tree_e)
 metric_tree_g = metric_tree(
-    tree, metric_g, divergent_g, "Geographic: divergent nodes, $METRIC"; metric=METRIC
+    tree,
+    res_g;
+    metric=METRIC,
+    nodes=divergent_g,
+    title="Geographic: divergent nodes, $METRIC",
 )
 # save("figures/Geo divergent nodes treeplot.png", metric_tree_g)
 
@@ -170,13 +160,7 @@ explorer_fig_g, explorer_g = nodeexplorer(
 )
 
 # Link the two: a node picked in one space is shown in the other too, if it has an SOS there
-for (from, to, res) in ((explorer_g, explorer_e, res_e), (explorer_e, explorer_g, res_g))
-    on(from.panel.node) do n
-        if n != to.panel.node[] && hassos(tree, res.sos, n)
-            to.panel.node[] = n
-        end
-    end
-end
+link_explorers!(tree, explorer_e, explorer_g)
 
 # Each explorer in its own window (NODIVWORKSHOP_WINDOWS=false skips this, e.g. headless)
 const SHOW_WINDOWS = isinteractive() && get(ENV, "NODIVWORKSHOP_WINDOWS", "true") != "false"
@@ -186,11 +170,11 @@ if SHOW_WINDOWS
 end
 
 # Ordinate the divergent nodes of both spaces by SOS-pattern similarity (cached SOS ->
-# `sos_distances` from Nodiv -> classical MDS in NodivMakie's `sosordination`)
+# `sos_distances` -> classical MDS in `sos_ordination`, both from Nodiv)
 D_g = sos_distances(res_g, divergent; minoverlap=MINOVERLAP)
 D_e = sos_distances(res_e, divergent; minoverlap=MINOVERLAP)
 function sos_mds_scatter(D, nodes, title)
-    return ordinationplot(sosordination(D, nodes); nodelabels=true, axis=(; title)).figure
+    return ordinationplot(sos_ordination(D, nodes); nodelabels=true, axis=(; title)).figure
 end
 mds_e = sos_mds_scatter(D_e, divergent, "Environmental: SOS-pattern similarity")
 # save("figures/Env SOS-pattern similarity.png", mds_e)
@@ -265,192 +249,53 @@ nspecies_scatter = scatter(
 # them. The two spaces are run separately and their magnitudes are NOT compared
 # (environmental "occupancy" is over tens of PC bins, geographic over ~18k cells).
 
-# (2) PRIMARY VIEW. Complete-linkage hierarchical clustering of the SOS-pattern distances
-# `D` of `nodes`. Genuine groups (if any) appear as dense blocks on the diagonal of the
-# heatmap below; the orthogonal/disjoint background stays uniform. Complete linkage is the
-# conservative default - it groups only all-pairs-similar nodes and will not chain marginal
-# pairs. Cut the tree at |r| >= `simcut` (i.e. distance height 1 - simcut).
-# Returns (hclust, groups::Dict node=>cluster).
-function sos_clusters(D, nodes; simcut, linkage=:complete)
-    hc = hclust(D; linkage)
-    grp = cutree(hc; h=1 - simcut)
-    return hc, Dict(node => grp[i] for (i, node) in enumerate(nodes))
-end
-
-# The clustering from `sos_clusters` drawn as a dendrogram-ordered |r| heatmap. Layout is
-# the standard clustermap: a horizontal dendrogram on the LEFT and the heatmap on the RIGHT,
-# sharing the y-axis (linked), so the leaves stay aligned with the heatmap rows; the
-# colourbar only takes width from the heatmap. The dendrogram is Makie's (experimental)
-# recipe, turned to put the leaves (height 0) against the heatmap; its heights are drawn at
-# negative x, so the ticks show them as positive. The heatmap's y labels print in the gap
-# between the two panels, so every dendrogram tip can be read straight off as a node name.
-# The x-axis carries the same names (rotated). The cut clusters with more than one node are
-# outlined on the diagonal with their number and colour from `cluster_tree`. Tune
-# `labelsize`/`figsize` for iterative exploration. The leaf order, bottom-to-top, shown on
-# the axes is `nodes[hc.order]`.
-function sos_cluster_heatmap(D, nodes, hc, groups, title; labelsize=9, figsize=(1300, 1150))
-    ord = hc.order
-    labs = nodes[ord]  # Node names in dendrogram-leaf order
-    S = (1 .- D)[ord, ord]  # Similarity |r|, reordered to match
-    n = length(labs)
-    grp = [groups[node] for node in labs]  # Cluster of each leaf, in leaf order
-
-    fig = Figure(; size=figsize)
-    Label(fig[0, 1:3], title; fontsize=18, font=:bold)
-    dend = Axis(
-        fig[1, 1];
-        xlabel="1 - |r|",
-        xtickformat=xs -> string.(round.(abs.(xs); digits=2)),
-        xgridvisible=false,
-        ygridvisible=false,
-        yticksvisible=false,
-        yticklabelsvisible=false,
-        leftspinevisible=false,
-        topspinevisible=false,
-        rightspinevisible=false,
-    )
-    hm = Axis(
-        fig[1, 2];
-        xticks=(1:n, labs),
-        yticks=(1:n, labs),
-        xticklabelrotation=pi / 2,
-        xticklabelsize=labelsize,
-        yticklabelsize=labelsize,
-    )
-    # Leaf hc.order[k] at y = k, lined up with heatmap row k; each merge at its height
-    dendrogram!(
-        dend,
-        Makie.hcl_nodes(hc; useheight=true);
-        absolute=true,
-        rotation=:right,
-        color=:black,
-    )
-    h = heatmap!(hm, 1:n, 1:n, S; colormap=:viridis, colorrange=(0, 1))
-    Colorbar(fig[1, 3], h; label="|r|")
-
-    idmap = cluster_id_map(groups)
-    colors = cluster_colors(length(idmap))
-    for (c, i) in idmap  # Cutree clusters are contiguous in `ord`
-        rows = findall(==(c), grp)
-        lo, hi = extrema(rows)
-        box = Rect2d(lo - 0.5, lo - 0.5, hi - lo + 1, hi - lo + 1)
-        poly!(hm, box; color=:transparent, strokecolor=:black, strokewidth=4)
-        poly!(hm, box; color=:transparent, strokecolor=colors[i], strokewidth=2)
-        textlabel!(
-            hm,
-            Point2d(hi + 0.5, hi + 0.5);
-            text=string(i),
-            fontsize=11,
-            background_color=colors[i],
-            strokewidth=1,
-            padding=2,
-            cornerradius=2,  # Inside the corner at the top edge, not clipped
-            text_align=hi == n ? (:right, :top) : (:left, :bottom),
-        )
-    end
-
-    linkyaxes!(dend, hm)
-    xlims!(dend, -1.02maximum(hc.heights), 0)
-    limits!(hm, 0.5, n + 0.5, 0.5, n + 0.5)
-    colsize!(fig.layout, 1, Relative(0.20))
-    return fig
-end
-
-# SECONDARY / CONFIRMATORY. Thresholded similarity graph + modularity communities, from the
-# SOS-pattern distance matrix `D` of `nodes`. Build an edge only between pairs with
-# |r| >= `simthresh`; the overlap floor is already enforced inside `sos_distances`
-# (thin-overlap and disjoint pairs sit at distance 1, |r| = 0, so they never become edges).
-# Co-patterned nodes then fall out as the communities that maximise the graph's modularity
-# Q (greedy agglomeration, Clauset-Newman-Moore): groups more densely linked inside than a
-# graph with the same degrees would be by chance - unlike connected components, which chain
-# any path of links into one group. Returns the non-singleton communities as vectors of
-# node names, and Q.
-function sos_similarity_communities(D, nodes; simthresh)
-    n = length(nodes)
-    g = Graphs.SimpleGraph(n)
-    for i in 1:n, j in (i + 1):n
-        (1 - D[i, j]) >= simthresh && Graphs.add_edge!(g, i, j)
-    end
-    m = Graphs.ne(g)
-    comm = collect(1:n)
-    m == 0 && return (; communities=Vector{String}[], modularity=0.0)
-    deg = Graphs.degree(g)
-    while true
-        best, best_pair = 0.0, nothing
-        for a in unique(comm), b in unique(comm)
-            a < b || continue
-            links = count(
-                e -> minmax(comm[Graphs.src(e)], comm[Graphs.dst(e)]) == (a, b),
-                Graphs.edges(g),
-            )
-            links == 0 && continue
-            dQ = links / m - sum(deg[comm .== a]) * sum(deg[comm .== b]) / (2m^2)
-            if dQ > best
-                best, best_pair = dQ, (a, b)
-            end
-        end
-        best_pair === nothing && break
-        comm[comm .== best_pair[2]] .= best_pair[1]
-    end
-    groups = filter(c -> length(c) > 1, [findall(==(c), comm) for c in unique(comm)])
-    return (;
-        communities=[[nodes[i] for i in c] for c in groups],
-        modularity=Graphs.modularity(g, comm),
-    )
-end
-
-function print_clusters(space, groups, communities)
-    sizes = sos_cluster_sizes(groups)
-    idmap = cluster_id_map(groups)
-    println("$space: $(sizes.nclusters) clusters, $(sizes.nsingletons) singletons")
-    for (c, i) in sort(collect(idmap); by=last)
-        println("  cluster $i: ", join(sizes.members[c], ", "))
-    end
-    println("  modularity Q = ", round(communities.modularity; digits=3))
-    for (i, members) in enumerate(communities.communities)
-        println("  community $i: ", join(members, ", "))
-    end
-end
-
 ### ---- Run both spaces on the divergent set (no cross-space magnitude comparison) ---- ###
 # (1) ONE-TIME DIAGNOSTIC, not the analysis. Fit MDS at a higher dimension and look at the
 # eigenvalue spectrum: if axes 3+ carry weight comparable to axes 1-2, the 2-D scatter is a
 # projection artefact and the "ring" is the honest report of near-equidistance.
 mds_eig_g = eigenvalueplot(
-    sosordination(D_g, divergent; maxoutdim=10);
+    sos_ordination(D_g, divergent; maxoutdim=10);
     axis=(; title="Geographic: MDS eigenvalues (n = $(length(divergent)))"),
 ).figure
 # save("figures/Geo MDS eigenvalues.png", mds_eig_g)
 mds_eig_e = eigenvalueplot(
-    sosordination(D_e, divergent; maxoutdim=10);
+    sos_ordination(D_e, divergent; maxoutdim=10);
     axis=(; title="Environmental: MDS eigenvalues (n = $(length(divergent)))"),
 ).figure
 # save("figures/Env MDS eigenvalues.png", mds_eig_e)
 
-hc_g, groups_g = sos_clusters(D_g, divergent; simcut=SIMCUT)
-hc_e, groups_e = sos_clusters(D_e, divergent; simcut=SIMCUT)
+# (2) PRIMARY VIEW. Complete-linkage hierarchical clustering, cut at |r| >= SIMCUT, drawn
+# as a dendrogram-ordered |r| heatmap
+clusters_g = sos_clusters(D_g, divergent; simcut=SIMCUT)
+clusters_e = sos_clusters(D_e, divergent; simcut=SIMCUT)
 
-heat_g = sos_cluster_heatmap(D_g, divergent, hc_g, groups_g, "Geographic: SOS clusters")
+heat_g = sos_cluster_heatmap(clusters_g; title="Geographic: SOS clusters")
 # save("figures/Geo SOS clusters.png", heat_g)
-heat_e = sos_cluster_heatmap(D_e, divergent, hc_e, groups_e, "Environmental: SOS clusters")
+heat_e = sos_cluster_heatmap(clusters_e; title="Environmental: SOS clusters")
 # save("figures/Env SOS clusters.png", heat_e)
 
+# (3) SECONDARY / CONFIRMATORY. Modularity communities of the similarity graph with edges at
+# |r| >= SIMCUT
 communities_g = sos_similarity_communities(D_g, divergent; simthresh=SIMCUT)
 communities_e = sos_similarity_communities(D_e, divergent; simthresh=SIMCUT)
 
 # Clusters mapped back onto the phylogeny (numbers and colours match the heatmap outlines)
-tree_clusters_g = cluster_tree(tree, groups_g, "Geographic: SOS clusters on the phylogeny")
+tree_clusters_g = cluster_tree(
+    tree, clusters_g; title="Geographic: SOS clusters on the phylogeny"
+)
 # save("figures/Geo SOS clusters on the phylogeny.png", tree_clusters_g)
 tree_clusters_e = cluster_tree(
-    tree, groups_e, "Environmental: SOS clusters on the phylogeny"
+    tree, clusters_e; title="Environmental: SOS clusters on the phylogeny"
 )
 # save("figures/Env SOS clusters on the phylogeny.png", tree_clusters_e)
 
 # Report the grouping result directly (this IS the scientific output):
 # mostly singletons with a few multi-node clusters = "largely idiosyncratic, with named
 # co-patterned exceptions"; substantial blocks = real groups to map onto the phylogeny.
-print_clusters("Geographic", groups_g, communities_g)
-print_clusters("Environmental", groups_e, communities_e)
+display(clusters_g)
+display(communities_g)
+display(clusters_e)
+display(communities_e)
 
 ### ---- Two node-level views of the divergent set ---- ###
 
@@ -472,8 +317,14 @@ divergent_tree = treeplot(
     figure=(; size=(1600, 1600)),
 ).figure
 # save("figures/Divergent nodes labelled.png", divergent_tree)
-# node_panel_pdf(birds_g, tree, divergent, res_g, "figures/divergent_node_panels_geo.pdf")
-# node_panel_pdf(birds_e, tree, divergent, res_e, "figures/divergent_node_panels_env.pdf")
+# node_panel_pdf(
+#     birds_g, tree, divergent, res_g, "figures/divergent_node_panels_geo.pdf";
+#     backend=CairoMakie,
+# )
+# node_panel_pdf(
+#     birds_e, tree, divergent, res_e, "figures/divergent_node_panels_env.pdf";
+#     backend=CairoMakie,
+# )
 
 ### ---- Traits: PCA of the AVONET morphometrics ---- ###
 
@@ -507,63 +358,20 @@ pcs.species = speciestraits.name
 addtraits!(birds_e, pcs, :species)
 addtraits!(birds_g, pcs, :species)
 
-cross2(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
-
-# Convex hull of 2-d points (Andrew's monotone chain), counter-clockwise, first point not
-# repeated
+# Convex hull of 2-d points (a GeoInterface polygon), or `nothing` for fewer than three
+# distinct points
 function convex_hull(pts)
-    ps = sort(unique(pts); by=p -> (p[1], p[2]))
-    length(ps) < 3 && return ps
-    function half(ps)
-        h = eltype(ps)[]
-        for p in ps
-            while length(h) >= 2 && cross2(h[end - 1], h[end], p) <= 0
-                pop!(h)
-            end
-            push!(h, p)
-        end
-        return h
-    end
-    lower, upper = half(ps), half(reverse(ps))
-    return [lower[1:(end - 1)]; upper[1:(end - 1)]]
-end
-
-function polygon_area(h)
-    n = length(h)
-    n < 3 && return 0.0
-    return abs(
-        sum(h[i][1] * h[mod1(i + 1, n)][2] - h[mod1(i + 1, n)][1] * h[i][2] for i in 1:n)
-    ) / 2
-end
-
-# The intersection of two convex polygons (Sutherland-Hodgman: clip `a` by each edge of `b`)
-function clip_polygon(a, b)
-    out = a
-    for i in eachindex(b)
-        isempty(out) && break
-        p, q = b[i], b[mod1(i + 1, length(b))]
-        inside(x) = cross2(p, q, x) >= 0
-        cut(s, e) = s + (e - s) * (cross2(p, q, s) / (cross2(p, q, s) - cross2(p, q, e)))
-        input, out = out, eltype(a)[]
-        for j in eachindex(input)
-            cur, prev = input[j], input[mod1(j - 1, length(input))]
-            if inside(cur)
-                inside(prev) || push!(out, cut(prev, cur))
-                push!(out, cur)
-            elseif inside(prev)
-                push!(out, cut(prev, cur))
-            end
-        end
-    end
-    return out
+    return length(unique(pts)) < 3 ? nothing : GeometryOps.convex_hull(pts)
 end
 
 # The overlap of two convex hulls as a proportion of the smaller one; NaN if either has no
 # area
 function hull_overlap(h1, h2)
-    a = min(polygon_area(h1), polygon_area(h2))
+    (h1 === nothing || h2 === nothing) && return NaN
+    a = min(GeometryOps.area(h1), GeometryOps.area(h2))
     a > 0 || return NaN
-    return polygon_area(clip_polygon(h1, h2)) / a
+    alg = GeometryOps.ConvexConvexSutherlandHodgman()
+    return GeometryOps.intersection_area(alg, h1, h2) / a
 end
 
 # Species => point in trait space, from the columns `x` and `y` of an assemblage's traits
@@ -582,7 +390,8 @@ end
 
 function closed_hull(pts)
     h = convex_hull(pts)
-    return length(h) < 3 ? Point2d[] : [h; h[1:1]]
+    (h === nothing || GeometryOps.area(h) == 0) && return Point2d[]
+    return Point2d.(GeoInterface.getpoint(GeoInterface.getexterior(h)))
 end
 
 # All species in trait space in grey, with the two child clades of `node` (an Observable) in
