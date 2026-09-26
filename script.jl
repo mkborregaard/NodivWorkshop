@@ -152,10 +152,10 @@ explorer_options = (;
     imageoptions=(; whitebackground=true),
     ordinationkw=(; minoverlap=MINOVERLAP),
 )
-explorer_fig_e, explorer_e = nodeexplorer(
+explorer_fig_e, explorer_e = node_explorer(
     birds_e, tree, res_e; nodes=divergent_e, explorer_options...
 )
-explorer_fig_g, explorer_g = nodeexplorer(
+explorer_fig_g, explorer_g = node_explorer(
     birds_g, tree, res_g; nodes=divergent_g, explorer_options...
 )
 
@@ -185,9 +185,9 @@ mds_g = sos_mds_scatter(D_g, divergent, "Geographic: SOS-pattern similarity")
 # `explorer_e.panel.node[] = focal` shows it in the explorer
 # Node names are numbered by data/clean/tree.nwk: re-running preprocess.jl renumbers them
 focal = "Node 17672"
-panel_e, _ = nodepanel(birds_e, tree, focal, res_e)
+panel_e, _ = node_panel(birds_e, tree, focal, res_e)
 # save("figures/Env node panel $focal.png", panel_e)
-panel_g, _ = nodepanel(birds_g, tree, focal, res_g)
+panel_g, _ = node_panel(birds_g, tree, focal, res_g)
 # save("figures/Geo node panel $focal.png", panel_g)
 
 allnodes = collect(keys(metric_e))
@@ -399,7 +399,7 @@ end
 # the explorer's clade colours, the smaller clade on top, each outlined by its convex hull
 function trait_panel!(gp, asm, tree, node, x, y; axis=(;))
     pts = trait_points(asm, x, y)
-    colors = cladecolors(:RdYlBu)
+    colors = clade_colors(:RdYlBu)
     ax = Axis(gp; xgridvisible=false, ygridvisible=false, axis...)
     scatter!(ax, collect(values(pts)); color=:gray80, markersize=3, inspectable=false)
     clades = lift(n -> child_points(tree, n, pts), node)
@@ -431,22 +431,22 @@ function trait_explorer(
 )
     fig = Figure(; size=(1600, 850))
     node = Observable(argmax(n -> marked[n], keys(marked)))
-    tr = explorertree!(
+    tr = explorer_tree!(
         fig[1, 1],
         tree,
         node,
         marked;
         values=nodevalues,
         label="geo $metric",
-        selectable=n -> hassos(tree, res_g.sos, n) && hassos(tree, res_e.sos, n),
+        selectable=n -> has_sos(tree, res_g.sos, n) && has_sos(tree, res_e.sos, n),
         unselectable="no SOS in both spaces",
         images,
         imageoptions,
         rangesize=birds_g,
     )
     panels = fig[1, 2] = GridLayout()
-    sosmap!(panels[1, 1], birds_g, node, res_g; title="Geographic SOS")
-    sosmap!(panels[1, 2], birds_e, node, res_e; title="Environmental SOS")
+    sos_map!(panels[1, 1], birds_g, node, res_g; title="Geographic SOS")
+    sos_map!(panels[1, 2], birds_e, node, res_e; title="Environmental SOS")
     pc_label(i) = "pca$i ($(round(100explained[i]; digits = 1))%)"
     for (col, (i, j)) in enumerate(((1, 2), (3, 4)))
         trait_panel!(

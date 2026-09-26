@@ -46,7 +46,7 @@ res_e, res_g = load("data/node_analysis.jld2", "res_e", "res_g")
 # The same settings as the explorers in script.jl
 const IMAGEDIR = "bow_images/workshop_species"
 function explorer(birds, res)
-    return nodeexplorer(
+    return node_explorer(
         birds,
         tree,
         res;
