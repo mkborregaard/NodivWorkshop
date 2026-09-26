@@ -8,7 +8,7 @@
 # the variable to show it again.
 
 using CSV, DataFrames, JLD2
-using Statistics, LogExpFunctions, GLM
+using Statistics, LogExpFunctions, GLM, MultivariateStats, StatsFuns
 using Clustering, Graphs
 using SpatialEcology, Phylo, Nodiv
 import CairoMakie            # only for saving vector (PDF) files; GLMakie saves raster formats
@@ -362,3 +362,172 @@ divergent_tree = treeplot(tree; treetype = :fan, showtips = false, branchcolor =
 # save("figures/Divergent nodes labelled.png", divergent_tree)
 # plot_node_pdf(birds_g, tree, divergent, res_g, "figures/divergent_node_panels_geo.pdf")
 # plot_node_pdf(birds_e, tree, divergent, res_e, "figures/divergent_node_panels_env.pdf")
+
+
+### --- Traits: PCA of the AVONET morphometrics ---------------------------------------------
+
+# Shapiro-Francia W': the squared correlation of the sorted values with the normal quantiles
+function normality(x)
+    n = length(x)
+    q = norminvcdf.(((1:n) .- 0.375) ./ (n + 0.25))
+    cor(sort(x), q)^2
+end
+
+# PCA of the columns of `df`: a column is logged where that raises its W' by more than
+# `tol`, then all are z-transformed. Returns the PCA, the logged columns and the
+# z-transformed matrix (species x traits) it was fit on.
+function traitpca(df; tol = 0.01)
+    X = Matrix{Float64}(df)
+    logged = [all(>(0), x) && normality(log.(x)) - normality(x) > tol for x in eachcol(X)]
+    X[:, logged] .= log.(X[:, logged])
+    Z = (X .- mean(X; dims = 1)) ./ std(X; dims = 1)
+    (; pca = fit(PCA, permutedims(Z); pratio = 1), logged = names(df)[logged], z = Z)
+end
+
+speciestraits = SpatialEcology.traits(birds_g)
+trait_pca = traitpca(speciestraits[:, 11:21])
+pca_explained = principalvars(trait_pca.pca) ./ var(trait_pca.pca)
+
+pcs = DataFrame(permutedims(predict(trait_pca.pca, permutedims(trait_pca.z))[1:4, :]), ["pca$i" for i in 1:4])
+pcs.species = speciestraits.name
+addtraits!(birds_e, pcs, :species)
+addtraits!(birds_g, pcs, :species)
+
+cross2(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
+
+# Convex hull of 2-d points (Andrew's monotone chain), counter-clockwise, first point not repeated
+function convexhull(pts)
+    ps = sort(unique(pts); by = p -> (p[1], p[2]))
+    length(ps) < 3 && return ps
+    function half(ps)
+        h = eltype(ps)[]
+        for p in ps
+            while length(h) >= 2 && cross2(h[end-1], h[end], p) <= 0
+                pop!(h)
+            end
+            push!(h, p)
+        end
+        h
+    end
+    lower, upper = half(ps), half(reverse(ps))
+    [lower[1:end-1]; upper[1:end-1]]
+end
+
+function polyarea(h)
+    n = length(h)
+    n < 3 && return 0.0
+    abs(sum(h[i][1] * h[mod1(i + 1, n)][2] - h[mod1(i + 1, n)][1] * h[i][2] for i in 1:n)) / 2
+end
+
+# The intersection of two convex polygons (Sutherland-Hodgman: clip `a` by each edge of `b`)
+function clippolygon(a, b)
+    out = a
+    for i in eachindex(b)
+        isempty(out) && break
+        p, q = b[i], b[mod1(i + 1, length(b))]
+        inside(x) = cross2(p, q, x) >= 0
+        cut(s, e) = s + (e - s) * (cross2(p, q, s) / (cross2(p, q, s) - cross2(p, q, e)))
+        input, out = out, eltype(a)[]
+        for j in eachindex(input)
+            cur, prev = input[j], input[mod1(j - 1, length(input))]
+            if inside(cur)
+                inside(prev) || push!(out, cut(prev, cur))
+                push!(out, cur)
+            elseif inside(prev)
+                push!(out, cut(prev, cur))
+            end
+        end
+    end
+    out
+end
+
+# The overlap of two convex hulls as a proportion of the smaller one; NaN if either has no area
+function hulloverlap(h1, h2)
+    a = min(polyarea(h1), polyarea(h2))
+    a > 0 || return NaN
+    polyarea(clippolygon(h1, h2)) / a
+end
+
+# Species => point in trait space, from the columns `x` and `y` of an assemblage's traits
+function traitpoints(asm, x, y)
+    t = SpatialEcology.traits(asm)
+    Dict(zip(t.name, Point2d.(t[!, x], t[!, y])))
+end
+
+# The trait-space points of the species of each of `node`'s two child clades
+childpoints(tree, node, pts) =
+    [[pts[sp] for sp in nodespecies(tree, getnodename(tree, c)) if haskey(pts, sp)]
+     for c in getchildren(tree, node)[1:2]]
+
+closedhull(pts) = (h = convexhull(pts); length(h) < 3 ? Point2d[] : [h; h[1:1]])
+
+# All species in trait space in grey, with the two child clades of `node` (an Observable)
+# in the explorer's clade colours, the smaller clade on top, each outlined by its convex hull
+function traitpanel!(gp, asm, tree, node, x, y; axis = (;))
+    pts = traitpoints(asm, x, y)
+    colors = cladecolors(:RdYlBu)
+    ax = Axis(gp; xgridvisible = false, ygridvisible = false, axis...)
+    scatter!(ax, collect(values(pts)); color = :gray80, markersize = 3, inspectable = false)
+    clades = lift(n -> childpoints(tree, n, pts), node)
+    for (k, color) in enumerate(colors)
+        cladepts = lift(c -> c[k], clades)
+        sc = scatter!(ax, cladepts; color, markersize = 5, inspectable = false)
+        on(c -> translate!(sc, 0, 0, length(c[k]) <= length(c[3 - k])), clades; update = true)
+        hull = lines!(ax, lift(closedhull, cladepts); color, linewidth = 2, inspectable = false)
+        translate!(hull, 0, 0, 2)
+    end
+    ax
+end
+
+# A node explorer of the two spaces and trait space: the tree, the SOS of the node shown in
+# geographic and environmental space, and its two child clades on PCA axes 1-2 and 3-4
+function traitexplorer(tree, marked, values, birds_g, res_g, birds_e, res_e, explained;
+                       images = nothing, imageoptions = (;))
+    fig = Figure(; size = (1600, 850))
+    node = Observable(argmax(n -> marked[n], keys(marked)))
+    tr = explorertree!(fig[1, 1], tree, node, marked; values, label = "geo $metric",
+                       selectable = n -> hassos(tree, res_g.sos, n) && hassos(tree, res_e.sos, n),
+                       unselectable = "no SOS in both spaces", images, imageoptions,
+                       rangesize = birds_g)
+    panels = fig[1, 2] = GridLayout()
+    sosmap!(panels[1, 1], birds_g, node, res_g; title = "Geographic SOS")
+    sosmap!(panels[1, 2], birds_e, node, res_e; title = "Environmental SOS")
+    pclabel(i) = "pca$i ($(round(100explained[i]; digits = 1))%)"
+    for (col, (i, j)) in enumerate(((1, 2), (3, 4)))
+        traitpanel!(panels[2, col], birds_g, tree, node, Symbol("pca$i"), Symbol("pca$j");
+                    axis = (; xlabel = pclabel(i), ylabel = pclabel(j)))
+    end
+    colsize!(fig.layout, 1, Relative(0.45))
+    DataInspector(fig)
+    fig, tr
+end
+
+trait_marked = Dict(n => metric_g[n] for n in divergent_e ∪ divergent_g)
+trait_fig, trait_explorer = traitexplorer(tree, trait_marked, metric_g, birds_g, res_g, birds_e, res_e,
+                                          pca_explained; explorer_options.images, explorer_options.imageoptions)
+if isinteractive() && get(ENV, "NODIVWORKSHOP_WINDOWS", "true") != "false"
+    display(GLMakie.Screen(), trait_fig)
+end
+
+pts12 = traitpoints(birds_g, :pca1, :pca2)
+trait_overlap = Dict(n => hulloverlap(convexhull.(childpoints(tree, n, pts12))...) for n in allnodes)
+
+overlap_dat = DataFrame(
+    :overlap => [trait_overlap[n] for n in allnodes],
+    :log_g => [log(metric_g[n]) for n in allnodes],
+    :log_e => [log(metric_e[n]) for n in allnodes]
+)
+overlap_dat = filter(row -> all(isfinite, row), overlap_dat)
+overlap_fit_g = lm(@formula(log_g ~ overlap), overlap_dat)
+overlap_fit_e = lm(@formula(log_e ~ overlap), overlap_dat)
+
+overlap_scatter = let fig = Figure(; size = (1100, 500))
+    for (col, (y, lmfit, title)) in enumerate(((:log_g, overlap_fit_g, "Geographic: trait overlap and $metric"),
+                                             (:log_e, overlap_fit_e, "Environmental: trait overlap and $metric")))
+        ax = Axis(fig[1, col]; title, xlabel = "trait overlap (pca1-2)", ylabel = "log $metric")
+        scatter!(ax, overlap_dat.overlap, overlap_dat[!, y]; markersize = 5)
+        ablines!(ax, coef(lmfit)...; color = :red)
+    end
+    fig
+end
+# save("figures/Trait overlap vs $metric.png", overlap_scatter)
