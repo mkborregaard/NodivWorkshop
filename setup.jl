@@ -31,11 +31,11 @@ function autodiscover()
     cs = joinpath(homedir(), "Library", "CloudStorage")
     isdir(cs) || return nothing
     tail = joinpath("EnvSpace_Workshop", "Nodiv project data", "NodivWorkshop")
-    for gd in readdir(cs; join = true)
+    for gd in readdir(cs; join=true)
         startswith(basename(gd), "GoogleDrive-") || continue
         stb = joinpath(gd, ".shortcut-targets-by-id")   # shared-drive shortcut targets
         if isdir(stb)
-            for id in readdir(stb; join = true)
+            for id in readdir(stb; join=true)
                 cand = joinpath(id, tail)
                 isdir(joinpath(cand, "data")) && return cand
             end
@@ -47,7 +47,7 @@ function autodiscover()
 end
 
 function resolve_dataroot()
-    !isempty(ARGS)                    && return ARGS[1]
+    !isempty(ARGS) && return ARGS[1]
     haskey(ENV, "NODIVWORKSHOP_DATA") && return ENV["NODIVWORKSHOP_DATA"]
     d = autodiscover()
     d === nothing && error("""
@@ -59,28 +59,29 @@ function resolve_dataroot()
 end
 
 function link_dir(sub, root)
-    tgt  = joinpath(root, sub)
+    tgt = joinpath(root, sub)
     link = joinpath(REPO, sub)
     isdir(tgt) || mkpath(tgt)  # figures/ may not exist yet on a fresh share
-    (islink(link) || ispath(link)) && rm(link; force = true, recursive = false)
+    (islink(link) || ispath(link)) && rm(link; force=true, recursive=false)
     try
         symlink(tgt, link)
         println("  linked  $sub  ->  $tgt")
     catch err
         @warn "Could not create a symlink for `$sub`. On Windows this needs Developer Mode " *
-              "or an elevated shell; otherwise create the link manually." exception = err
+            "or an elevated shell; otherwise create the link manually." exception = err
     end
 end
 
 root = resolve_dataroot()
-isdir(joinpath(root, "data")) ||
-    error("No `data/` under $root — is that the right folder?")
+isdir(joinpath(root, "data")) || error("No `data/` under $root — is that the right folder?")
 println("Data folder: $root")
 for sub in ("data", "figures")
     link_dir(sub, root)
 end
 
-println("Instantiating the Julia environment (the General registry, and NodivMakie from GitHub)…")
+println(
+    "Instantiating the Julia environment (the General registry, and NodivMakie from GitHub)…",
+)
 Pkg.activate(REPO)
 Pkg.instantiate()
 println("Done. Open a REPL with  julia --project=.  and run  include(\"script.jl\")")

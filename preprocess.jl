@@ -18,15 +18,16 @@ outdir = "data/clean"
 underscore(s) = replace(string(s), " " => "_")
 
 # long-format presence/absence table [site, abundance, species]
-make_phylocom(sitevals, species) =
-    DataFrame(site = string.(sitevals), abundance = 1, species = underscore.(species))
+function make_phylocom(sitevals, species)
+    return DataFrame(; site=string.(sitevals), abundance=1, species=underscore.(species))
+end
 
 # reorder a per-site (site, x, y) lookup to the assemblage's site order (unique
 # appearance in the phylocom), since SpatialEcology aligns coords by row order.
 function align_coords(phylo, lookup)
     sites = unique(phylo.site)
     idx = indexin(sites, string.(lookup.site))
-    DataFrame(site = sites, x = lookup.x[idx], y = lookup.y[idx])
+    return DataFrame(; site=sites, x=lookup.x[idx], y=lookup.y[idx])
 end
 
 ### Read the RDS in R ----------------------------------------------------------
@@ -74,18 +75,26 @@ sitestats_g.ID_env = [s == "NA" ? missing : s for s in sitestats_g.ID_env]
 ### Phylogeny: keep only the taxa present in both spaces, which also drops the few
 ### species found in geographic space alone.
 tree = rcopy(RootedTree, R"tr")
-shared = intersect(getleafnames(tree), unique(phylocom_e.species), unique(phylocom_g.species))
+shared = intersect(
+    getleafnames(tree), unique(phylocom_e.species), unique(phylocom_g.species)
+)
 keeptips!(tree, shared)
 sort!(tree)
 filter!(r -> r.species in shared, phylocom_e)
 filter!(r -> r.species in shared, phylocom_g)
 
 # coordinates: PC bin midpoints for env; Behrmann cell centres in km for geo
-coords_e = align_coords(phylocom_e,
-    DataFrame(site = env.ID_env, x = env.pc1_mid, y = env.pc2_mid))
-coords_g = align_coords(phylocom_g,
-    DataFrame(site = geo.ID_geo, x = (geo.col .+ 0.5) .* cellsize ./ 1000,
-                                 y = (geo.row .+ 0.5) .* cellsize ./ 1000))
+coords_e = align_coords(
+    phylocom_e, DataFrame(; site=env.ID_env, x=env.pc1_mid, y=env.pc2_mid)
+)
+coords_g = align_coords(
+    phylocom_g,
+    DataFrame(;
+        site=geo.ID_geo,
+        x=(geo.col .+ 0.5) .* cellsize ./ 1000,
+        y=(geo.row .+ 0.5) .* cellsize ./ 1000,
+    ),
+)
 
 ### Traits: one row per tree tip, keyed by `species` for addtraits!
 traits = rcopy(DataFrame, R"x$traits")
@@ -104,7 +113,7 @@ tree = parsenewick(rcopy(String, R"write.tree($tree)"))
 # clade is several taxa at once (e.g. a family of a single genus) the highest rank wins.
 function taxonnodes(tree, traits)
     genus = String.(first.(split.(traits.species, "_")))
-    names = Dict{String, String}()
+    names = Dict{String,String}()
     for taxa in (genus, traits.Family1, traits.Order1)   # low to high rank: higher overwrites
         for taxon in unique(taxa)
             sp = traits.species[taxa .== taxon]
@@ -114,7 +123,7 @@ function taxonnodes(tree, traits)
             ntips == length(sp) && (names[node] = taxon)
         end
     end
-    names
+    return names
 end
 for (node, taxon) in taxonnodes(tree, traits)
     renamenode!(tree, node, taxon)
