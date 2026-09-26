@@ -31,7 +31,7 @@ include("functions.jl")
 
 set_theme!(; colormap=Reverse(:Spectral))
 
-### Load the cleaned inputs (from preprocess.jl) and build the assemblages -----
+### ---- Load the cleaned inputs (from preprocess.jl) and build the assemblages ---- ###
 
 tree = sort!(parsenewick(read("data/clean/tree.nwk", String)))
 phylocom_e = strsite!(CSV.read("data/clean/phylocom_e.csv", DataFrame))
@@ -62,7 +62,7 @@ richness_g = mapfigure(
 )
 # save("figures/Geo species richness.png", richness_g)
 
-### Heavy step: divergence metrics + SOS for every node, both spaces, cached to disk ----------
+### ---- Heavy step: divergence metrics + SOS for every node, cached to disk ---- ###
 # `node_metrics` computes the divergence metrics (GND, RMS-SOS, ...) together with the
 # per-cell SOS they are built on. This is the slow part - randomisations over the whole
 # tree, and ~18k cells for the geographic scan - so cache it: re-running the script just
@@ -73,10 +73,10 @@ if !isfile(CACHEFILE)
     res_g = node_metrics(birds_g, tree; nsims=200)
     jldsave(CACHEFILE; res_e, res_g)
 end
-# each a NodeMetrics: nodes (in tree order), gnd, rms, sd, ses, pval, varying and sos
+# Each a NodeMetrics: nodes (in tree order), gnd, rms, sd, ses, pval, varying and sos
 res_e, res_g = load(CACHEFILE, "res_e", "res_g")
 
-const METRIC = :rms  # alternatives are :pval and :gnd
+const METRIC = :rms  # Alternatives are :pval and :gnd
 const THRESHOLD = 2
 metric_e = getfield(res_e, METRIC)
 metric_g = getfield(res_g, METRIC)
@@ -89,7 +89,7 @@ metric_g = getfield(res_g, METRIC)
 const MINOVERLAP = 3
 const SIMCUT = 0.7
 
-### ---- Exploratory plotting (from the cached NodeMetrics; `_e` vs `_g`) ----- ###
+### ---- Exploratory plotting (from the cached NodeMetrics; `_e` vs `_g`) ---- ###
 
 # Strongly divergent nodes in each space (`METRIC` above `THRESHOLD`)
 divergent_e = divergent_nodes(res_e; by=METRIC, threshold=THRESHOLD)
@@ -185,7 +185,7 @@ if SHOW_WINDOWS
     display(GLMakie.Screen(), explorer_fig_g)
 end
 
-# ordinate the divergent nodes of both spaces by SOS-pattern similarity (cached SOS ->
+# Ordinate the divergent nodes of both spaces by SOS-pattern similarity (cached SOS ->
 # `sos_distances` from Nodiv -> classical MDS in NodivMakie's `sosordination`)
 D_g = sos_distances(res_g, divergent; minoverlap=MINOVERLAP)
 D_e = sos_distances(res_e, divergent; minoverlap=MINOVERLAP)
@@ -197,9 +197,10 @@ mds_e = sos_mds_plot(D_e, divergent, "Environmental: SOS-pattern similarity")
 mds_g = sos_mds_plot(D_g, divergent, "Geographic: SOS-pattern similarity")
 # save("figures/Geo SOS-pattern similarity.png", mds_g)
 
-# parent/SOS/children panel for one node (4th arg = cached SOS, no recompute); also
+# Parent/SOS/children panel for one node (4th arg = cached SOS, no recompute); also
 # `explorer_e.panel.node[] = focal` shows it in the explorer
-focal = "Node 17672"   # node names are numbered by data/clean/tree.nwk: re-running preprocess.jl renumbers them
+# Node names are numbered by data/clean/tree.nwk: re-running preprocess.jl renumbers them
+focal = "Node 17672"
 panel_e, _ = nodepanel(birds_e, tree, focal, res_e)
 # save("figures/Env node panel $focal.png", panel_e)
 panel_g, _ = nodepanel(birds_g, tree, focal, res_g)
@@ -215,7 +216,7 @@ dat = filter(row -> all(isfinite, row), dat)
 metric_scatter = scatter(
     dat.log_g, dat.log_e; axis=(; xlabel="log geo $METRIC", ylabel="log env $METRIC")
 )
-ablines!(metric_scatter.axis, 0, 1; color=:red)   # the 1:1 line
+ablines!(metric_scatter.axis, 0, 1; color=:red)  # The 1:1 line
 # save("figures/Env vs geo $METRIC.png", metric_scatter)
 
 rms_fit = lm(@formula(log_e ~ log_g), dat)
@@ -255,20 +256,18 @@ nspecies_scatter = scatter(
 )
 # save("figures/Geo $METRIC vs clade species.png", nspecies_scatter)
 
-### ===========================================================================
-### Grouping divergent nodes by SOS-pattern similarity
-### The MDS scatter (`sos_mds_plot`) above is read together with its eigenvalue diagnostic
-### (1); the primary read is the complete-linkage clustered heatmap (2), with a thresholded
-### similarity graph (3) as the confirmatory secondary. Distances come from `sos_distances`
-### in Nodiv: 1 - |r| over the shared occupied cells, with the minimum-overlap floor
-### `MINOVERLAP`. Each space's distances are computed once and every view is derived from
-### them. The two spaces are run separately and their magnitudes are NOT compared
-### (environmental "occupancy" is over tens of PC bins, geographic over ~18k cells).
-### ===========================================================================
+### ---- Grouping divergent nodes by SOS-pattern similarity ---- ###
+# The MDS scatter (`sos_mds_plot`) above is read together with its eigenvalue diagnostic
+# (1); the primary read is the complete-linkage clustered heatmap (2), with a thresholded
+# similarity graph (3) as the confirmatory secondary. Distances come from `sos_distances`
+# in Nodiv: 1 - |r| over the shared occupied cells, with the minimum-overlap floor
+# `MINOVERLAP`. Each space's distances are computed once and every view is derived from
+# them. The two spaces are run separately and their magnitudes are NOT compared
+# (environmental "occupancy" is over tens of PC bins, geographic over ~18k cells).
 
-# (2) PRIMARY VIEW. Complete-linkage hierarchical clustering of the SOS-pattern distances `D`
-# of `nodes`. Genuine groups (if any) appear as dense blocks on the diagonal of the heatmap
-# below; the orthogonal/disjoint background stays uniform. Complete linkage is the
+# (2) PRIMARY VIEW. Complete-linkage hierarchical clustering of the SOS-pattern distances
+# `D` of `nodes`. Genuine groups (if any) appear as dense blocks on the diagonal of the
+# heatmap below; the orthogonal/disjoint background stays uniform. Complete linkage is the
 # conservative default - it groups only all-pairs-similar nodes and will not chain marginal
 # pairs. Cut the tree at |r| >= `simcut` (i.e. distance height 1 - simcut).
 # Returns (hclust, groups::Dict node=>cluster).
@@ -278,23 +277,23 @@ function sos_clusters(D, nodes; simcut, linkage=:complete)
     return hc, Dict(node => grp[i] for (i, node) in enumerate(nodes))
 end
 
-# The clustering from `sos_clusters` drawn as a dendrogram-ordered |r| heatmap.
-# Layout is the standard clustermap: a horizontal dendrogram on the LEFT and the heatmap on
-# the RIGHT, sharing the y-axis (linked), so the leaves stay aligned with the heatmap rows;
-# the colourbar only takes width from the heatmap. The dendrogram is Makie's (experimental)
+# The clustering from `sos_clusters` drawn as a dendrogram-ordered |r| heatmap. Layout is
+# the standard clustermap: a horizontal dendrogram on the LEFT and the heatmap on the RIGHT,
+# sharing the y-axis (linked), so the leaves stay aligned with the heatmap rows; the
+# colourbar only takes width from the heatmap. The dendrogram is Makie's (experimental)
 # recipe, turned to put the leaves (height 0) against the heatmap; its heights are drawn at
 # negative x, so the ticks show them as positive. The heatmap's y labels print in the gap
-# between the two panels, so every dendrogram tip can be read straight off as a node name. The
-# x-axis carries the same names (rotated). The cut clusters with more than one node are
+# between the two panels, so every dendrogram tip can be read straight off as a node name.
+# The x-axis carries the same names (rotated). The cut clusters with more than one node are
 # outlined on the diagonal with their number and colour from `plot_cluster_tree`. Tune
-# `labelsize`/`figsize` for iterative exploration. The leaf order, bottom-to-top, shown on the
-# axes is `nodes[hc.order]`.
+# `labelsize`/`figsize` for iterative exploration. The leaf order, bottom-to-top, shown on
+# the axes is `nodes[hc.order]`.
 function sos_cluster_heatmap(D, nodes, hc, groups, title; labelsize=9, figsize=(1300, 1150))
     ord = hc.order
-    labs = nodes[ord]  # node names in dendrogram-leaf order
-    S = (1 .- D)[ord, ord]  # similarity |r|, reordered to match
+    labs = nodes[ord]  # Node names in dendrogram-leaf order
+    S = (1 .- D)[ord, ord]  # Similarity |r|, reordered to match
     n = length(labs)
-    grp = [groups[node] for node in labs]  # cluster of each leaf, in leaf order
+    grp = [groups[node] for node in labs]  # Cluster of each leaf, in leaf order
 
     fig = Figure(; size=figsize)
     Label(fig[0, 1:3], title; fontsize=18, font=:bold)
@@ -318,7 +317,7 @@ function sos_cluster_heatmap(D, nodes, hc, groups, title; labelsize=9, figsize=(
         xticklabelsize=labelsize,
         yticklabelsize=labelsize,
     )
-    # leaf hc.order[k] at y = k, lined up with heatmap row k; each merge at its height
+    # Leaf hc.order[k] at y = k, lined up with heatmap row k; each merge at its height
     dendrogram!(
         dend,
         Makie.hcl_nodes(hc; useheight=true);
@@ -331,7 +330,7 @@ function sos_cluster_heatmap(D, nodes, hc, groups, title; labelsize=9, figsize=(
 
     idmap = cluster_idmap(groups)
     colors = clustercolors(length(idmap))
-    for (c, i) in idmap  # cutree clusters are contiguous in `ord`
+    for (c, i) in idmap  # Cutree clusters are contiguous in `ord`
         rows = findall(==(c), grp)
         lo, hi = extrema(rows)
         box = Rect2d(lo - 0.5, lo - 0.5, hi - lo + 1, hi - lo + 1)
@@ -345,7 +344,7 @@ function sos_cluster_heatmap(D, nodes, hc, groups, title; labelsize=9, figsize=(
             background_color=colors[i],
             strokewidth=1,
             padding=2,
-            cornerradius=2,   # inside the corner at the top edge, not clipped
+            cornerradius=2,  # Inside the corner at the top edge, not clipped
             text_align=hi == n ? (:right, :top) : (:left, :bottom),
         )
     end
@@ -361,11 +360,11 @@ end
 # SOS-pattern distance matrix `D` of `nodes`. Build an edge only between pairs with
 # |r| >= `simthresh`; the overlap floor is already enforced inside `sos_distances`
 # (thin-overlap and disjoint pairs sit at distance 1, |r| = 0, so they never become edges).
-# Co-patterned nodes then fall out as the communities that maximise the graph's modularity Q
-# (greedy agglomeration, Clauset-Newman-Moore): groups more densely linked inside than a graph
-# with the same degrees would be by chance - unlike connected components, which chain any
-# path of links into one group. Returns the non-singleton communities as vectors of node
-# names, and Q.
+# Co-patterned nodes then fall out as the communities that maximise the graph's modularity
+# Q (greedy agglomeration, Clauset-Newman-Moore): groups more densely linked inside than a
+# graph with the same degrees would be by chance - unlike connected components, which chain
+# any path of links into one group. Returns the non-singleton communities as vectors of
+# node names, and Q.
 function sos_similarity_communities(D, nodes; simthresh)
     n = length(nodes)
     g = Graphs.SimpleGraph(n)
@@ -413,7 +412,7 @@ function print_clusters(space, groups, communities)
     end
 end
 
-# --- Run both spaces on the divergent set (no cross-space magnitude comparison) ----------
+### ---- Run both spaces on the divergent set (no cross-space magnitude comparison) ---- ###
 # (1) ONE-TIME DIAGNOSTIC, not the analysis. Fit MDS at a higher dimension and look at the
 # eigenvalue spectrum: if axes 3+ carry weight comparable to axes 1-2, the 2-D scatter is a
 # projection artefact and the "ring" is the honest report of near-equidistance.
@@ -455,12 +454,13 @@ tree_clusters_e = plot_cluster_tree(
 print_clusters("Geographic", groups_g, communities_g)
 print_clusters("Environmental", groups_e, communities_e)
 
-### --- Two node-level views of the divergent set ------------------------------------------
+### ---- Two node-level views of the divergent set ---- ###
 
 # Fan tree showing ONLY the divergent nodes, each labelled with its name in a small pale box
 # so it stays readable over the branches; the rest of the tree is a plain grey skeleton. The
 # boxes will overlap if packed too tightly, so widen the figure size (or drop
-# `nodelabelsize`) until they clear; the redundant "Node " is dropped so the boxes stay small.
+# `nodelabelsize`) until they clear; the redundant "Node " is dropped so the boxes stay
+# small.
 divergent_tree = treeplot(
     tree;
     treetype=:fan,
@@ -477,7 +477,7 @@ divergent_tree = treeplot(
 # plot_node_pdf(birds_g, tree, divergent, res_g, "figures/divergent_node_panels_geo.pdf")
 # plot_node_pdf(birds_e, tree, divergent, res_e, "figures/divergent_node_panels_env.pdf")
 
-### --- Traits: PCA of the AVONET morphometrics ---------------------------------------------
+### ---- Traits: PCA of the AVONET morphometrics ---- ###
 
 # Shapiro-Francia W': the squared correlation of the sorted values with the normal quantiles
 function normality(x)
@@ -511,7 +511,8 @@ addtraits!(birds_g, pcs, :species)
 
 cross2(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
 
-# Convex hull of 2-d points (Andrew's monotone chain), counter-clockwise, first point not repeated
+# Convex hull of 2-d points (Andrew's monotone chain), counter-clockwise, first point not
+# repeated
 function convexhull(pts)
     ps = sort(unique(pts); by=p -> (p[1], p[2]))
     length(ps) < 3 && return ps
@@ -559,7 +560,8 @@ function clippolygon(a, b)
     return out
 end
 
-# The overlap of two convex hulls as a proportion of the smaller one; NaN if either has no area
+# The overlap of two convex hulls as a proportion of the smaller one; NaN if either has no
+# area
 function hulloverlap(h1, h2)
     a = min(polyarea(h1), polyarea(h2))
     a > 0 || return NaN
@@ -585,8 +587,8 @@ function closedhull(pts)
     return length(h) < 3 ? Point2d[] : [h; h[1:1]]
 end
 
-# All species in trait space in grey, with the two child clades of `node` (an Observable)
-# in the explorer's clade colours, the smaller clade on top, each outlined by its convex hull
+# All species in trait space in grey, with the two child clades of `node` (an Observable) in
+# the explorer's clade colours, the smaller clade on top, each outlined by its convex hull
 function traitpanel!(gp, asm, tree, node, x, y; axis=(;))
     pts = traitpoints(asm, x, y)
     colors = cladecolors(:RdYlBu)

@@ -13,9 +13,9 @@
 # here; the script uses them only if bow_images/workshop_species exists. See README.md.
 #
 # Usage:
-#   julia setup.jl /path/to/NodivWorkshop         # the Drive folder holding data/ & figures/
+#   julia setup.jl /path/to/NodivWorkshop         # The Drive folder with data/, figures/
 #   NODIVWORKSHOP_DATA=/path/... julia setup.jl    # ...or via an environment variable
-#   julia setup.jl                                 # macOS only: auto-discover the Drive folder
+#   julia setup.jl                                 # macOS only: find the Drive folder
 #
 # The explicit path (argument or env var) works on any OS. Auto-discovery is a macOS
 # convenience only; on Linux/Windows pass the path yourself. On Windows, creating the
@@ -33,14 +33,14 @@ function autodiscover()
     tail = joinpath("EnvSpace_Workshop", "Nodiv project data", "NodivWorkshop")
     for gd in readdir(cs; join=true)
         startswith(basename(gd), "GoogleDrive-") || continue
-        stb = joinpath(gd, ".shortcut-targets-by-id")   # shared-drive shortcut targets
+        stb = joinpath(gd, ".shortcut-targets-by-id")  # Shared-drive shortcut targets
         if isdir(stb)
             for id in readdir(stb; join=true)
                 cand = joinpath(id, tail)
                 isdir(joinpath(cand, "data")) && return cand
             end
         end
-        cand = joinpath(gd, "My Drive", tail)  # or directly under My Drive
+        cand = joinpath(gd, "My Drive", tail)  # Or directly under My Drive
         isdir(joinpath(cand, "data")) && return cand
     end
     return nothing
@@ -61,14 +61,17 @@ end
 function link_dir(sub, root)
     tgt = joinpath(root, sub)
     link = joinpath(REPO, sub)
-    isdir(tgt) || mkpath(tgt)  # figures/ may not exist yet on a fresh share
+    # figures/ may not exist yet on a fresh share
+    isdir(tgt) || mkpath(tgt)
     (islink(link) || ispath(link)) && rm(link; force=true, recursive=false)
     try
         symlink(tgt, link)
         println("  linked  $sub  ->  $tgt")
     catch err
-        @warn "Could not create a symlink for `$sub`. On Windows this needs Developer Mode " *
-            "or an elevated shell; otherwise create the link manually." exception = err
+        msg =
+            "Could not create a symlink for `$sub`. On Windows this needs Developer " *
+            "Mode or an elevated shell; otherwise create the link manually."
+        @warn msg exception = err
     end
     return nothing
 end
@@ -80,9 +83,7 @@ for sub in ("data", "figures")
     link_dir(sub, root)
 end
 
-println(
-    "Instantiating the Julia environment (the General registry, and NodivMakie from GitHub)…",
-)
+println("Instantiating the Julia environment (General registry; NodivMakie from GitHub)…")
 Pkg.activate(REPO)
 Pkg.instantiate()
 println("Done. Open a REPL with  julia --project=.  and run  include(\"script.jl\")")

@@ -20,7 +20,7 @@ const OUTDIR = "data/clean"
 # RDS; only swap spaces for underscores, as Newick tip labels need.
 underscore(s) = replace(string(s), " " => "_")
 
-# long-format presence/absence table [site, abundance, species]
+# Long-format presence/absence table [site, abundance, species]
 function make_phylocom(sitevals, species)
     return DataFrame(; site=string.(sitevals), abundance=1, species=underscore.(species))
 end
@@ -33,7 +33,7 @@ function align_coords(phylo, lookup)
     return DataFrame(; site=sites, x=lookup.x[idx], y=lookup.y[idx])
 end
 
-### Read the RDS in R ----------------------------------------------------------
+### ---- Read the RDS in R ---- ###
 # The geographic grid is a Behrmann equal-area grid stored as (clipped, simplified)
 # lon/lat polygons. Projected back to Behrmann (ESRI:54017) it is exactly regular:
 # square cells one degree of longitude wide, with the lattice anchored at 0 (the
@@ -54,20 +54,20 @@ gdf$lon <- ll[, 1]
 gdf$lat <- ll[, 2]
 edf <- st_drop_geometry(x$e_space$grid_sf)
 tr <- x$phylogeny
-# support values; Phylo rejects them as duplicate node names
+# Support values; Phylo rejects them as duplicate node names
 tr$node.label <- NULL
 tr$tip.label <- gsub(" ", "_", tr$tip.label)
 """
 cellsize = rcopy(R"cellsize")
 
-### Environmental space --------------------------------------------------------
+### ---- Environmental space ---- ###
 env = rcopy(DataFrame, R"edf")
 pres_e = rcopy(DataFrame, R"x$e_space$presence")
 phylocom_e = make_phylocom(pres_e.ID_env, pres_e.Species)
 sitestats_e = rename(env, :mn_g_d_ => :mean_geo_dist_km, :occupid => :occupied)
 sitestats_e.occupied = sitestats_e.occupied .== 1
 
-### Geographic space -----------------------------------------------------------
+### ---- Geographic space ---- ###
 geo = rcopy(DataFrame, R"gdf")
 pres_g = rcopy(DataFrame, R"x$g_space$presence")
 phylocom_g = make_phylocom(pres_g.ID_geo, pres_g.Species)
@@ -76,8 +76,9 @@ sitestats_g = select(geo, Not([:col, :row]))
 sitestats_g.area_m = parse.(Float64, sitestats_g.area_m)
 sitestats_g.ID_env = [s == "NA" ? missing : s for s in sitestats_g.ID_env]
 
-### Phylogeny: keep only the taxa present in both spaces, which also drops the few
-### species found in geographic space alone.
+### ---- Phylogeny ---- ###
+# Keep only the taxa present in both spaces, which also drops the few species found in
+# geographic space alone.
 tree = rcopy(RootedTree, R"tr")
 shared = intersect(
     getleafnames(tree), unique(phylocom_e.species), unique(phylocom_g.species)
@@ -88,7 +89,7 @@ sharedset = Set(shared)
 filter!(r -> r.species in sharedset, phylocom_e)
 filter!(r -> r.species in sharedset, phylocom_g)
 
-# coordinates: PC bin midpoints for env; Behrmann cell centres in km for geo
+# Coordinates: PC bin midpoints for env; Behrmann cell centres in km for geo
 coords_e = align_coords(
     phylocom_e, DataFrame(; site=env.ID_env, x=env.pc1_mid, y=env.pc2_mid)
 )
@@ -101,12 +102,13 @@ coords_g = align_coords(
     ),
 )
 
-### Traits: one row per tree tip, keyed by `species` for addtraits!
+### ---- Traits ---- ###
+# One row per tree tip, keyed by `species` for addtraits!
 avonet = rcopy(DataFrame, R"x$traits")
 avonet = select(avonet, :Species1 => ByRow(underscore) => :species, Not(:Species1))
 filter!(r -> r.species in sharedset, avonet)
 
-### Name the internal nodes that are exactly a genus, family or order -----------
+### ---- Name the internal nodes that are exactly a genus, family or order ---- ###
 # Round-trip the tree through ape's Newick first: that is the file script.jl used to
 # read, so parsing it back gives the same auto-generated "Node N" names that the
 # cached node analysis (data/node_analysis.jld2) is keyed by.
@@ -136,11 +138,11 @@ end
 for (node, taxon) in taxonnodes(tree, avonet)
     renamenode!(tree, node, taxon)
 end
-# ladderize (order each node's clades by size) for plotting. parsenewick does not keep
+# Ladderize (order each node's clades by size) for plotting. parsenewick does not keep
 # the file's child order, so script.jl ladderizes again after reading the tree.
 sort!(tree)
 
-### Write the cleaned inputs ---------------------------------------------------
+### ---- Write the cleaned inputs ---- ###
 mkpath(OUTDIR)
 CSV.write(joinpath(OUTDIR, "phylocom_e.csv"), phylocom_e)
 CSV.write(joinpath(OUTDIR, "coords_e.csv"), coords_e)
