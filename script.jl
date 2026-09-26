@@ -11,9 +11,11 @@ using CSV, DataFrames, JLD2
 using Statistics, LogExpFunctions, GLM, MultivariateStats, StatsFuns
 using Clustering, Graphs
 using SpatialEcology, Phylo, Nodiv
-import CairoMakie            # only for saving vector (PDF) files; GLMakie saves raster formats
+# CairoMakie only for saving vector (PDF) files; GLMakie saves raster formats
+import CairoMakie
 using GLMakie, NodivMakie
-GLMakie.activate!()          # loading a backend activates it, so make sure GLMakie is the one
+# Loading a backend activates it, so make sure GLMakie is the one
+GLMakie.activate!()
 
 include("functions.jl")
 
@@ -123,7 +125,9 @@ explorer_fig_g, explorer_g = nodeexplorer(birds_g, tree, res_g; nodes = divergen
 # Link the two: a node picked in one space is shown in the other too, if it has an SOS there
 for (from, to, res) in ((explorer_g, explorer_e, res_e), (explorer_e, explorer_g, res_g))
     on(from.panel.node) do n
-        n != to.panel.node[] && hassos(tree, res.sos, n) && (to.panel.node[] = n)
+        if n != to.panel.node[] && hassos(tree, res.sos, n)
+            to.panel.node[] = n
+        end
     end
 end
 
@@ -171,8 +175,9 @@ occupied_e = Dict(node => noccupied(get_clade(birds_e, tree, node)) for node in 
 occupied_hist = hist(collect(values(occupied_e)); axis = (; xlabel = "occupied env sites", ylabel = "nodes"))
 # save("figures/Env occupied sites histogram.png", occupied_hist)
 
-occupied_tree = let (fig, ax, p) = treeplot(tree; treetype = :fan, nodecolor = occupied_e, showtips = false,
-                                            markersize = 5, figure = (; size = (800, 700)))
+occupied_tree = let
+    fig, ax, p = treeplot(tree; treetype = :fan, nodecolor = occupied_e, showtips = false,
+                          markersize = 5, figure = (; size = (800, 700)))
     Colorbar(fig[1, 2], p; label = "occupied env sites")
     fig
 end
@@ -225,10 +230,10 @@ end
 # axes is `nodes[hc.order]`.
 function sos_cluster_heatmap(D, nodes, hc, groups, title; labelsize = 9, figsize = (1300, 1150))
     ord  = hc.order
-    labs = nodes[ord]                             # node names in dendrogram-leaf order
-    S    = (1 .- D)[ord, ord]                     # similarity |r|, reordered to match
+    labs = nodes[ord]  # node names in dendrogram-leaf order
+    S    = (1 .- D)[ord, ord]  # similarity |r|, reordered to match
     n    = length(labs)
-    grp  = [groups[node] for node in labs]        # cluster of each leaf, in leaf order
+    grp  = [groups[node] for node in labs]  # cluster of each leaf, in leaf order
 
     fig  = Figure(; size = figsize)
     Label(fig[0, 1:3], title; fontsize = 18, font = :bold)
@@ -247,7 +252,7 @@ function sos_cluster_heatmap(D, nodes, hc, groups, title; labelsize = 9, figsize
 
     idmap = cluster_idmap(groups)
     colors = clustercolors(length(idmap))
-    for (c, i) in idmap                           # cutree clusters are contiguous in `ord`
+    for (c, i) in idmap  # cutree clusters are contiguous in `ord`
         rows = findall(==(c), grp)
         lo, hi = extrema(rows)
         box = Rect2d(lo - 0.5, lo - 0.5, hi - lo + 1, hi - lo + 1)
@@ -460,7 +465,10 @@ childpoints(tree, node, pts) =
     [[pts[sp] for sp in nodespecies(tree, getnodename(tree, c)) if haskey(pts, sp)]
      for c in getchildren(tree, node)[1:2]]
 
-closedhull(pts) = (h = convexhull(pts); length(h) < 3 ? Point2d[] : [h; h[1:1]])
+function closedhull(pts)
+    h = convexhull(pts)
+    return length(h) < 3 ? Point2d[] : [h; h[1:1]]
+end
 
 # All species in trait space in grey, with the two child clades of `node` (an Observable)
 # in the explorer's clade colours, the smaller clade on top, each outlined by its convex hull
@@ -523,8 +531,9 @@ overlap_fit_g = lm(@formula(log_g ~ overlap), overlap_dat)
 overlap_fit_e = lm(@formula(log_e ~ overlap), overlap_dat)
 
 overlap_scatter = let fig = Figure(; size = (1100, 500))
-    for (col, (y, lmfit, title)) in enumerate(((:log_g, overlap_fit_g, "Geographic: trait overlap and $metric"),
-                                             (:log_e, overlap_fit_e, "Environmental: trait overlap and $metric")))
+    panels = ((:log_g, overlap_fit_g, "Geographic: trait overlap and $metric"),
+              (:log_e, overlap_fit_e, "Environmental: trait overlap and $metric"))
+    for (col, (y, lmfit, title)) in enumerate(panels)
         ax = Axis(fig[1, col]; title, xlabel = "trait overlap (pca1-2)", ylabel = "log $metric")
         scatter!(ax, overlap_dat.overlap, overlap_dat[!, y]; markersize = 5)
         ablines!(ax, coef(lmfit)...; color = :red)

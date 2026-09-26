@@ -1,4 +1,8 @@
-strsite!(df) = (df.site = string.(df.site); df)   # site ids stay strings after CSV
+# Site ids stay strings after CSV
+function strsite!(df)
+    df.site = string.(df.site)
+    return df
+end
 
 # A map of one value per site, with a colour bar beside it
 function mapfigure(args...; title = "", label = "", kw...)
@@ -14,14 +18,20 @@ function cluster_idmap(groups)
     ids = sort(collect(keys(sos_cluster_sizes(groups).members)))
     Dict(c => i for (i, c) in enumerate(ids))
 end
-clustercolors(m) = (c = Makie.to_colormap(:tab20); [c[mod1(i, length(c))] for i in 1:m])
+
+function clustercolors(m)
+    c = Makie.to_colormap(:tab20)
+    return [c[mod1(i, length(c))] for i in 1:m]
+end
 
 # Cluster-size table for a `groups` Dict: how many nodes fall in each cut cluster, and which
 # clusters are non-trivial (size > 1). A near-flat table of singletons is the "largely
 # idiosyncratic" null result; a few multi-node clusters are the co-patterned exceptions.
 function sos_cluster_sizes(groups)
     counts = Dict{Int,Int}()
-    for c in values(groups); counts[c] = get(counts, c, 0) + 1; end
+    for c in values(groups)
+        counts[c] = get(counts, c, 0) + 1
+    end
     nontrivial = [c for (c, k) in counts if k > 1]
     members = Dict(c => sort([n for (n, g) in groups if g == c]) for c in nontrivial)
     (; nclusters = length(counts), nsingletons = count(==(1), values(counts)), members)

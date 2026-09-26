@@ -40,7 +40,7 @@ function autodiscover()
                 isdir(joinpath(cand, "data")) && return cand
             end
         end
-        cand = joinpath(gd, "My Drive", tail)            # or directly under My Drive
+        cand = joinpath(gd, "My Drive", tail)  # or directly under My Drive
         isdir(joinpath(cand, "data")) && return cand
     end
     return nothing
@@ -61,7 +61,7 @@ end
 function link_dir(sub, root)
     tgt  = joinpath(root, sub)
     link = joinpath(REPO, sub)
-    isdir(tgt) || mkpath(tgt)                       # figures/ may not exist yet on a fresh share
+    isdir(tgt) || mkpath(tgt)  # figures/ may not exist yet on a fresh share
     (islink(link) || ispath(link)) && rm(link; force = true, recursive = false)
     try
         symlink(tgt, link)
