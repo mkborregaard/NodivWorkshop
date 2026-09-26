@@ -59,14 +59,7 @@ function explorer(birds, res)
 end
 explorer_fig_e, explorer_e = explorer(birds_e, res_e)
 explorer_fig_g, explorer_g = explorer(birds_g, res_g)
-
-for (from, to, res) in ((explorer_g, explorer_e, res_e), (explorer_e, explorer_g, res_g))
-    on(from.panel.node) do n
-        if n != to.panel.node[] && hassos(tree, res.sos, n)
-            to.panel.node[] = n
-        end
-    end
-end
+link_explorers!(tree, explorer_e, explorer_g)
 
 screens = [
     display(GLMakie.Screen(; title="Environmental space"), explorer_fig_e),

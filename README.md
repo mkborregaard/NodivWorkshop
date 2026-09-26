@@ -4,6 +4,7 @@ An analysis in progress with [Nodiv.jl](https://github.com/mkborregaard/Nodiv.jl
 node-based SOS/GND analysis of birds in environmental and geographic space.
 `preprocess.jl` prepares the inputs. `script.jl` is worked through interactively, a line or
 block at a time and not necessarily in order; it is not meant to be run top to bottom.
+`explorer.jl` opens the interactive node explorers straight from a terminal.
 Helper functions that are finished live in `functions.jl`, which the script `include`s;
 functions still being developed stay in the script. Once finished, general analysis code
 moves to Nodiv and general plotting code to NodivMakie; only what is specific to this
@@ -86,6 +87,18 @@ their SOS maps.
 
 Set `NODIVWORKSHOP_WINDOWS=false` to keep the explorers from opening windows (e.g. when
 running the script headless).
+
+To use just the explorers, without working through `script.jl`, run `explorer.jl` from a
+terminal:
+
+```bash
+julia explorer.jl
+```
+
+It needs the setup above and the cached `data/node_analysis.jld2`, which it loads (it
+never recomputes the analysis). It opens the two linked explorers, environmental and
+geographic, each in its own window, and ends when both windows are closed. Getting to the
+windows takes a few minutes, mostly loading and compiling the packages.
 
 ### Species images (optional, not in the repo)
 
