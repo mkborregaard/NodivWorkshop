@@ -205,7 +205,8 @@ ablines!(metric_scatter.axis, 0, 1; color=:red)  # The 1:1 line
 
 rms_fit = lm(@formula(log_e ~ log_g), dat)
 
-occupied_e = Dict(node => noccupied(get_clade(birds_e, tree, node)) for node in allnodes)
+occupied_of = clade_richness(birds_e, tree)
+occupied_e = Dict(node => count(>(0), occupied_of(node)) for node in allnodes)
 occupied_hist = hist(
     collect(values(occupied_e)); axis=(; xlabel="occupied env sites", ylabel="nodes")
 )
@@ -232,7 +233,7 @@ occupied_scatter = scatter(
 )
 # save("figures/Env $METRIC vs occupied sites.png", occupied_scatter)
 
-nspecies_g = Dict(node => nspecies(get_clade(birds_g, tree, node)) for node in allnodes)
+nspecies_g = Dict(node => length(nodespecies(tree, node)) for node in allnodes)
 nspecies_scatter = scatter(
     [log(nspecies_g[n]) for n in allnodes],
     [metric_g[n] for n in allnodes];
