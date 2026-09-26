@@ -1,0 +1,3 @@
+# Formatting-only commits, skipped by git blame (git config blame.ignoreRevsFile .git-blame-ignore-revs)
+# Format with JuliaFormatter (BlueStyle)
+7718d171ec28b39369c5cf0a23c5d94572031f5a
