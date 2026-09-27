@@ -39,7 +39,7 @@ function explorer(birds, res)
         imageoptions=(; whitebackground=true),
         ordinationkw=(; minoverlap=3),
     )
-    clusters = sos_clusters(sos_distances(res, nodes; minoverlap=3), nodes; simcut=0.7)
+    clusters = sos_clusters(sos_distances(res, nodes; minoverlap=3), nodes; simcut=0.6)
     return fig, color_by_clusters!(ex, clusters)
 end
 explorer_fig_e, explorer_e = explorer(birds_e, res_e)

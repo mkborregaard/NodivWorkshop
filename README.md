@@ -93,7 +93,8 @@ The interactive entry point is the **node explorer**, one per space
 the fan tree with the divergent nodes marked, next to the node's SOS map, the richness of
 its two child clades, and an ordination (MDS) of the divergent nodes by the similarity of
 their SOS maps, coloured by their SOS cluster (the colours of `heat_g` and
-`tree_clusters_g`; grey for nodes in no cluster).
+`tree_clusters_g`; grey for nodes on their own). The ordination is a 2-D projection for
+browsing; the clusters come from the full distances.
 - Click a node marker, or the branch leading to a node, to show that node. Clicking a
   point in the ordination does the same; the node shown has a ring there.
 - Hover over nodes, branches, ordination points and map cells for labels.

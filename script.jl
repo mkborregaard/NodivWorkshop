@@ -55,7 +55,7 @@ metric_g = getfield(res_g, METRIC)
 # fit on a handful of cells - which is also what keeps disjoint pairs at the maximum. 3 is
 # the smallest overlap where |r| is not trivially 1.
 const MINOVERLAP = 3
-const SIMCUT = 0.7
+const SIMCUT = 0.6
 
 ### ---- Exploratory plotting (from the cached NodeMetrics; `_e` vs `_g`) ---- ###
 
@@ -181,46 +181,22 @@ nspecies_scatter = scatter(
 # save("figures/Geo $METRIC vs clade species.png", nspecies_scatter)
 
 ### ---- Grouping divergent nodes by SOS-pattern similarity ---- ###
-# The primary read is the complete-linkage clustered heatmap (2), with a thresholded
-# similarity graph (3) as the confirmatory secondary; the MDS ordination in the explorers
-# below is read together with its eigenvalue diagnostic (1). Distances come from
-# `sos_distances` in Nodiv: 1 - |r| over the shared occupied cells, with the minimum-overlap
-# floor `MINOVERLAP`. Each space's distances are computed once and every view is derived
-# from them. Each space is run on its own divergent nodes, and their magnitudes are NOT
-# compared (environmental "occupancy" is over tens of PC bins, geographic over ~18k cells).
+# Complete-linkage clustering of each space's divergent nodes, cut at |r| >= SIMCUT: every
+# pair of nodes in a cluster has SOS maps correlated at |r| >= SIMCUT, every node is in
+# exactly one cluster, and a node with no such partner is on its own. Distances come from
+# `sos_distances` in Nodiv: 1 - |r| over the cells where both SOS maps are defined, with
+# the minimum-overlap floor `MINOVERLAP`. The two spaces' |r| are NOT compared
+# (environmental space has ~500 PC bins, geographic ~18k cells). See
+# docs/sos_pattern_grouping_design.md for why the number of clusters is not chosen from
+# the data.
 D_g = sos_distances(res_g, divergent_g; minoverlap=MINOVERLAP)
 D_e = sos_distances(res_e, divergent_e; minoverlap=MINOVERLAP)
-
-# (1) ONE-TIME DIAGNOSTIC, not the analysis. Fit MDS at a higher dimension and look at the
-# eigenvalue spectrum: if axes 3+ carry weight comparable to axes 1-2, the 2-D ordination is
-# a projection artefact and the "ring" is the honest report of near-equidistance.
-mds_eig_g = eigenvalueplot(
-    sos_ordination(D_g, divergent_g; maxoutdim=10);
-    axis=(; title="Geographic: MDS eigenvalues (n = $(length(divergent_g)))"),
-).figure
-# save("figures/Geo MDS eigenvalues.png", mds_eig_g)
-mds_eig_e = eigenvalueplot(
-    sos_ordination(D_e, divergent_e; maxoutdim=10);
-    axis=(; title="Environmental: MDS eigenvalues (n = $(length(divergent_e)))"),
-).figure
-# save("figures/Env MDS eigenvalues.png", mds_eig_e)
-
-# (2) PRIMARY VIEW. Complete-linkage hierarchical clustering, cut at |r| >= SIMCUT, drawn
-# as a dendrogram-ordered |r| heatmap
 clusters_g = sos_clusters(D_g, divergent_g; simcut=SIMCUT)
 clusters_e = sos_clusters(D_e, divergent_e; simcut=SIMCUT)
+display(clusters_g)
+display(clusters_e)
 
-heat_g = sos_cluster_heatmap(clusters_g; title="Geographic: SOS clusters")
-# save("figures/Geo SOS clusters.png", heat_g)
-heat_e = sos_cluster_heatmap(clusters_e; title="Environmental: SOS clusters")
-# save("figures/Env SOS clusters.png", heat_e)
-
-# (3) SECONDARY / CONFIRMATORY. Modularity communities of the similarity graph with edges at
-# |r| >= SIMCUT
-communities_g = sos_similarity_communities(D_g, divergent_g; simthresh=SIMCUT)
-communities_e = sos_similarity_communities(D_e, divergent_e; simthresh=SIMCUT)
-
-# Clusters mapped back onto the phylogeny (numbers and colours match the heatmap outlines)
+# Clusters mapped back onto the phylogeny
 tree_clusters_g = cluster_tree(
     tree, clusters_g; title="Geographic: SOS clusters on the phylogeny"
 )
@@ -230,23 +206,23 @@ tree_clusters_e = cluster_tree(
 )
 # save("figures/Env SOS clusters on the phylogeny.png", tree_clusters_e)
 
-# Report the grouping result directly (this IS the scientific output):
-# mostly singletons with a few multi-node clusters = "largely idiosyncratic, with named
-# co-patterned exceptions"; substantial blocks = real groups to map onto the phylogeny.
-display(clusters_g)
-display(communities_g)
-display(clusters_e)
-display(communities_e)
+# The |r| of every pair in dendrogram order, clusters outlined with the numbers and colours
+# of the tree above
+heat_g = sos_cluster_heatmap(clusters_g; title="Geographic: SOS clusters")
+# save("figures/Geo SOS clusters.png", heat_g)
+heat_e = sos_cluster_heatmap(clusters_e; title="Environmental: SOS clusters")
+# save("figures/Env SOS clusters.png", heat_e)
 
 ### ---- The node explorers ---- ###
 
 # The interactive entry point: the fan tree with the divergent nodes marked, next to the
 # SOS map and the two child clades' maps, and an ordination of the divergent nodes by
-# SOS-pattern similarity, coloured by their SOS cluster above (grey: in no cluster). Each
-# opens on its space's most divergent node (focal_e, focal_g above). Click a node or a
-# branch on the tree, or a point in the ordination, to show that node; hover for labels.
-# The Birds of the World images in bow_images/ are private and not in the repo: they are
-# used only if that folder is there.
+# SOS-pattern similarity, coloured by their SOS cluster above (grey: on its own). The
+# ordination is a 2-D projection for browsing, so its distances are approximate; the
+# clusters come from the full distances. Each opens on its space's most divergent node
+# (focal_e, focal_g above). Click a node or a branch on the tree, or a point in the
+# ordination, to show that node; hover for labels. The Birds of the World images in
+# bow_images/ are private and not in the repo: they are used only if that folder is there.
 const IMAGEDIR = "bow_images/workshop_species"
 explorer_options = (;
     metric=METRIC,

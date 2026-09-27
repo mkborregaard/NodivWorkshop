@@ -1,74 +1,90 @@
-# Design spec: grouping divergent nodes by SOS-pattern similarity
+# Design: grouping divergent nodes by SOS-pattern similarity
 
-**Context.** Node-based analysis (Borregaard et al. 2014) applied to New World birds in two spaces — geographic (`birds_g`, `res_g`) and environmental (`birds_e`, `res_e`). After selecting strongly divergent nodes (`divergent`, the `divergent_e ∩ divergent_g` intersection, n ≈ 100), the goal is to **identify groups of nodes that exhibit very similar SOS patterns**. The current approach computes a correlation-based distance matrix (`sos_distances` in `Nodiv`) and feeds it to classical MDS (`fit(MDS, …; distances = true, maxoutdim = 2)`), plotted by `sos_mds_plot` in `script.jl`. This document specifies the corrected approach and the reasoning behind it. It is a design spec, not an implementation; the implementer should read the current body of `sos_distances` first, since the parameter names and the `res.sos[node]` access pattern below are inferred, not confirmed.
+**Context.** Node-based analysis (Borregaard et al. 2014) applied to New World birds in two spaces — geographic (`birds_g`, `res_g`) and environmental (`birds_e`, `res_e`). Each space has its own set of strongly divergent nodes (RMS-SOS > 2): `divergent_e` (92 nodes) and `divergent_g` (38 nodes). The earlier intersection `divergent = divergent_e ∩ divergent_g` is no longer used. The goal is to **identify groups of nodes that exhibit very similar SOS patterns**, separately in each space. This document records the method decided on 2026-09-27 and the reasoning behind it, including the alternatives that were tried and rejected.
 
-## The goal, stated precisely
+## The decision
 
-Find clusters of nodes whose per-cell SOS maps are mutually similar, against a background of nodes whose patterns are mutually distinct. "Similar pattern" must treat the two daughter labels symmetrically (see sign, below), and must not reward pairs that merely co-occupy space without sharing the same over/under-representation structure. A valid outcome includes finding *few or no* tight groups — that the divergent nodes are mostly idiosyncratic is a legitimate scientific result, not a failure to be engineered away.
+- **Distance:** `D = 1 − |r|` from `sos_distances` in Nodiv (unweighted, Pearson, `minoverlap = 3`).
+- **Grouping:** complete-linkage hierarchical clustering (`sos_clusters`), cut at an absolute similarity **|r| ≥ 0.6** (`SIMCUT` in `script.jl`). Every divergent node is in exactly one cluster; a cluster of one node is allowed. The cut is a choice the user owns and states in the methods. The data do not choose it.
+- **Output:** the printed cluster membership, and the clusters on the phylogeny (`cluster_tree`). The dendrogram-ordered |r| heatmap (`sos_cluster_heatmap`) is optional.
+- **Explorer:** the ordination panel of the node explorers (2-D classical MDS of the same `D`) stays, coloured by the clusters (`color_by_clusters!`). It is a projection for browsing, so distances in it are approximate. The clusters come from the full `D`, not from the 2-D picture.
+- **Dropped:** the MDS eigenvalue plot, the thresholded similarity-graph communities (`sos_similarity_communities`), and the bootstrap-split clusters (`supported_clusters`).
 
-## What the current MDS picture is actually telling us
+What complete linkage at a cut means is easy to state: *every pair of nodes in a group has |r| ≥ 0.6.* The number of clusters then answers "how many groups of nodes share an SOS pattern at similarity ≥ 0.6". It does not answer "how many distinct patterns there are". The data do not support a method-independent answer to the latter (see below).
 
-The circular/ring arrangement with little clustering is not a weak or failed embedding. It is an accurate report. Classical MDS embeds a matrix of near-uniform, near-maximal distances by spreading the points evenly on a circle, because that is the 2-D configuration in which all pairwise distances are roughly equal. The ring therefore means: *almost all of these nodes are mutually near-orthogonal in pattern, and there is little low-dimensional structure to spatialize.* This follows directly from the empirical distance distribution (next section). A different embedder will not "recover" groups that the distances do not support; it will only redistribute the same near-equidistance differently.
+## Principles (unchanged)
 
-If a demonstration is wanted, fit MDS once at `maxoutdim ≈ min(10, n−1)` and inspect the eigenvalues. If axes 3+ carry weight comparable to axes 1–2, the 2-D scatter is a projection artefact, which confirms the ring reading. This is a one-time diagnostic, not the analysis.
+**1. Sign of SOS is arbitrary per node, so use 1 − |r|, not 1 − r.** Which daughter is "clade 1" is incidental to the node. A mirror-image SOS map is the *same* divergence geography with the labels swapped.
 
-## Agreed design principles
+**2. Non-overlap is real difference, not missing information.** Two clades in disjoint regions are maximally different in where their over- and under-representation falls, so a disjoint pair gets distance 1. The same holds for pairs sharing fewer than `minoverlap` cells with both SOS defined.
 
-**1. Sign of SOS is arbitrary per node, so use 1 − |r|, not 1 − r.** Which daughter is "clade 1" is incidental to the node, so a mirror-image SOS map represents the *same* divergence geography with the labels swapped. Folding by absolute value makes positive and negative correlations equally indicative of pattern similarity, which is what the question requires. (In this dataset there are essentially no strong negative correlations, so in practice |r| and r nearly coincide; |r| remains the principled choice regardless.)
+**3. No ancestor–descendant exclusion.** SOS at a node compares that node's two daughters. A node and its parent are built from different partitions of different species sets, so there is no design-level reason for them to share a pattern. The data bear this out: nested (ancestor–descendant) pairs are 22% of the similar pairs and 22% of all pairs in the environmental space. So co-clustered nodes mostly mark shared geography, not shared ancestry. Do not exclude or down-weight nested pairs.
 
-**2. Non-overlap is real difference, not missing information.** Two clades occupying disjoint regions are maximally divergent in *where* their over/under-representation falls. Encoding a disjoint pair as distance 1.0 is the honest encoding, and the resulting pile-up of distances near 1.0 is true structure, not an artefact. Methods that hide this structure (see "what to avoid") would misrepresent the data. The implication is the opposite of smoothing it away: the analysis must preserve the distinction between "genuinely similar" and "everything else," rather than compressing the background into a manufactured gradient.
+**4. A result of few or no groups is legitimate.** If the divergent nodes are largely idiosyncratic in SOS pattern, that is the finding, not a failure to be engineered away.
 
-**3. The empirical distance range is compressed toward the maximum.** Pattern correlations run from roughly random up to strongly similar, with essentially nothing more anticorrelated than chance. On the 1 − |r| distance this puts the few similar pairs near 0, unrelated-but-overlapping pairs near 1 − |r_random|, and disjoint pairs at exactly 1 — i.e. a thin tail of close pairs against a dense band near the maximum. There is no genuine "far pole" to pull a low-dimensional structure out, which is exactly why the embedding rings. The right question is therefore not "which 2-D method recovers the groups" but "are there any tight groups at all, or only a handful of similar pairs against a sea of orthogonality" — a question best answered on the similarity matrix directly, not on any spatialization of it.
+## Distance, as implemented
 
-**4. No ancestor–descendant collapse.** SOS at a node compares *that node's two daughters'* relative occupancy under a null; a node and its parent are built from different partitions of different species sets, so there is no design-level reason for them to share a pattern. If nested nodes do cluster, that is a contingent finding (a divergence concentrated in one descendant lineage and persisting down the tree), to be inspected on the phylogeny — not a pseudoreplication artefact to remove a priori. Do not exclude or down-weight ancestor–descendant pairs.
+`sos_distances(res, nodes; minoverlap=3)` correlates two SOS maps over the cells where both are finite: where both nodes' daughter clades are present and the null model varies. Occupied cells where the null model cannot vary have no SOS and do not count. A pair sharing fewer than `minoverlap` such cells gets distance 1, and a constant map gets distance 1. The options exist but are not used: `method = :spearman`, and `overlapweight = true` (`D = 1 − O·|r|`, with `O` the Sørensen index of the occupied cells).
 
-## Distance definition
+**The spaces differ in size, and |r| is not comparable between them.** The environmental space has 489 climate bins, and the geographic space 17,542 cells. (Earlier versions of this document and of `script.jl` said "tens of PC bins"; that was wrong.)
+- **Environmental:** pairs of divergent nodes share a median of 310 bins with SOS defined (5th percentile 71). Co-clustered pairs share a median of about 350. At 300 bins, r = 0.7 has a 95% CI of about 0.64–0.75, so the |r| values are not sampling noise.
+- **Distributions:** environmental median |r| is 0.39 (90th percentile 0.74), with no pairs at distance 1. Geographic median |r| is 0.31 (90th percentile 0.81), and 11% of pairs are at distance 1. The environmental SOS maps share broad climate structure, so they are *not* mostly orthogonal. The expectation in earlier versions of this document, a near-uniform background with a few hot pairs, holds at best for the geographic space.
 
-Distance between nodes *k* and *l*:
+**`minoverlap`:** Nodiv suggests a floor of 5–10 cells for a geographic grid. At present no co-clustered pair in either space shares fewer than 10 cells, so 3 versus 5–10 changes nothing. It is a per-space setting to revisit if the node sets change. Range overlap does not drive the clustering either: co-clustered pairs share nearly all of the smaller node's SOS cells.
 
-```
-D(k,l) = 1 − |r|, computed over cells where both nodes are occupied,
-         provided the shared occupied support is at least `minoverlap` cells;
-         otherwise D(k,l) = 1.
-```
+## Sensitivity to the cut
 
-Specifics:
+Complete linkage; total clusters = groups of two or more nodes + single nodes.
 
-- **Support = occupied cells.** Define occupancy per node explicitly (clade present), not as `SOS != 0`. Under the paper's definition SOS ≈ 0 at occupied cells where both daughters are equally represented, so an `SOS != 0` mask would silently drop equal-representation cells in addition to absent ones — a third conflation on top of the two named above. Confirm which mask the current `sos_distances` uses; this is the most likely latent bug.
-- **Minimum-overlap guard.** Below `minoverlap` shared occupied cells, set distance to 1 rather than trusting a correlation estimated on a handful of cells. This handles the spurious-high-correlation-on-tiny-overlap case by rule. A floor on the order of 5–10 cells is reasonable for the geographic scan; choose by the precision you are willing to defend, and note that the environmental scan has far fewer bins so the floor must be set separately per space.
-- **|Spearman| over |Pearson| if SOS is heavy-tailed,** which it tends to be at strongly divergent nodes where a few cells carry extreme values. Worth checking the marginal SOS distributions and choosing accordingly.
+| cut |r| ≥ | environmental (92 nodes) | geographic (38 nodes) |
+|---|---|---|
+| 0.6 | 27 = 22 + 5 | 17 = 10 + 7 |
+| 0.7 | 35 = 25 + 10 | 18 = 11 + 7 |
+| 0.8 | 53 = 22 + 31 | 22 = 10 + 12 |
 
-**One genuine judgment call — whether to weight by overlap extent.** Correlation conditions *on* the shared support and is then blind to how large it is: two nodes sharing three cells with perfect correlation get the same distance as two sharing their whole range. Given principle 2 (partial overlap = partial comparability), there is a case for multiplying by an overlap term, `D = 1 − O·|r|` with `O` a Jaccard/Sørensen/Simpson index of occupied-cell overlap, so that partial-overlap-but-high-correlation does not masquerade as full similarity. The cost is that this re-couples overlap and pattern into one number. Recommendation: compute both the overlap term and |r| and keep them inspectable; default to the overlap-weighted distance for the clustering, but retain the unweighted version so the two can be compared. The downstream method (below) is robust to this choice, which is part of why it is preferred.
+The geographic answer is stable across the range: about ten groups and a handful of single nodes. The environmental answer depends strongly on the cut, which fits a continuum of variants rather than discrete patterns (next section).
 
-## Recommended method
+## Why the number of clusters is not chosen from the data
 
-**Primary: hierarchical clustering on the distance matrix, read as a clustered heatmap with dendrogram.** At n ≈ 100 this is fully legible and it sidesteps spatialization entirely: a heatmap never has to reconcile the disjoint 1.0s against the rest, it simply shows them as the uniform background they are. Reorder rows/columns by the dendrogram and the dense blocks (real groups of co-patterned nodes), if any, appear on the diagonal while the orthogonal background stays uniform. This directly answers the question in principle 3.
+**Silhouette peak.** Partitions for k = 2..40 were scored by mean silhouette (single nodes scored 0) and by bootstrap stability (ARI of `cutree(k)` between the full data and 100 cell resamples). Average linkage beat complete linkage on both scores, in both spaces.
+- **Geographic:** a clear optimum at k = 9–11 (silhouette 0.37–0.40, ARI 0.85–0.90).
+- **Environmental:** weak structure at every k (silhouette 0.20–0.29; peak k = 8 with ARI 0.70). A silhouette below about 0.25 is conventionally read as no substantial structure.
 
-- **Linkage: average or complete; not Ward.** Ward assumes roughly spherical Euclidean clusters and will impose block structure that is not there. Complete linkage is the conservative default — it groups only all-pairs-similar nodes and will not chain marginal pairs into spurious groups, which matters when the similar tail is thin.
-- **Read groups by cutting the dendrogram at a justifiable height,** e.g. the height corresponding to |r| ≈ 0.7, rather than by eyeballing a scatter. State the cut threshold and its rationale in the methods.
-- Map the resulting groups back onto the phylogeny and onto the SOS maps for interpretation, including any nested nodes that co-cluster.
+The silhouette peak always returns some k ≥ 2 and penalises single nodes, so it cannot return the "largely idiosyncratic" result. That makes it relative in the same way as the per-space percentile cut on |r|, which was rejected for imposing the result. A null reference would be needed, but none of the available ones is valid:
+- **Shuffling `D` among the pairs** breaks the transitivity that real maps have, and it gives *higher* null silhouettes than observed (environmental 0.29 vs 0.38, geographic 0.40 vs 0.51). It is uninformative, not evidence against structure.
+- **Permuting the cells** doesn't work either. A joint permutation of all maps leaves `D` unchanged; independent permutations turn every map into noise with |r| ≈ 0.
 
-**Secondary / confirmatory: thresholded similarity graph + community detection (Leiden or Louvain).** Build edges only between pairs with |r| above a high threshold (and overlap above the floor); disjoint and orthogonal pairs never become edges and so drop out of the structure rather than repelling anything, leaving genuinely co-patterned nodes as connected components/communities. Run this *after* the heatmap: the heatmap tells you whether there is enough block structure to make community detection worthwhile. If there is, the graph gives a cleaner group assignment and scales if the node set later grows.
+**Weighted modularity (check only, not in the repo).** Complete graph with edge weight |r|, standard weighted modularity with the degree null model, and greedy agglomeration (Clauset, Newman & Moore 2004). The null is the same greedy maximisation on 50 graphs with the weights shuffled among the node pairs, which keeps the distribution of |r| but not each node's strength.
+- **Environmental:** two communities (55 and 37 nodes), Q = 0.093 against a null mean of 0.040 (maximum of 50 shuffles 0.045). **This weak two-way split is the only structure in either space that beat a null.** It probably corresponds to the two broad moderate-|r| blocks visible in the environmental heatmap (not checked node by node).
+- **Geographic:** three communities, Q = 0.100 against a null mean of 0.085 (maximum 0.097). No evidence of structure beyond the null.
 
-**Alternative single-distance route: HDBSCAN on the (overlap-weighted) distance matrix.** Density-based, finds dense groups and labels the remainder as noise — which is the honest treatment of lonely nodes and matches principle 2/3. Use if a single-distance pipeline is preferred over the graph.
+**The methods disagree.** The modularity and silhouette-peak partitions agree poorly (ARI 0.18 environmental, 0.27 geographic). At the same k (2 environmental, 3 geographic), average linkage and modularity give an ARI of about −0.02. The number of patterns thus depends entirely on the method. An absolute, stated cut is the honest alternative.
+
+**Complete rather than average linkage** despite average linkage's better scores: complete linkage keeps the guarantee that every pair in a group is above the cut. That guarantee is what makes an absolute cut interpretable. Complete linkage also does not chain marginal pairs into one group.
+
+## Rejected: bootstrap splitting (`supported_clusters`)
+
+The complete-linkage clusters were resampled over the cells, 1000 times with replacement. Any cluster that did not re-form in at least 95% of resamples was split down the dendrogram. This was dropped for two reasons.
+- **It can only split, so it only raises the count.** In the environmental space at a cut of 0.7 it ended with 69 clusters: 20 groups and 49 single nodes.
+- **The support is only an upper bound.** Resampling cells independently ignores the spatial (and climatic) autocorrelation of neighbouring cells.
+
+Bootstrap support could still be reported as information about individual clusters, but it is not a rule for forming them.
 
 ## What to avoid, and why
 
-- **UMAP / t-SNE at this n.** Two distinct problems. First, at n ≈ 100 they are unreliable and manufacture clusters from noise. Second, they build *relative* neighborhoods — every node gets its k nearest regardless of absolute distance — so a node whose nearest neighbors sit at 0.9 is handed a fake neighborhood, exactly the misrepresentation principle 2 warns against. The goal needs an *absolute* notion of "similar enough," which thresholded graphs and HDBSCAN provide and neighbor-embeddings do not. Reserve UMAP for a future regime with hundreds of nodes, and even then only as a viewer of communities defined on the true graph, never as the definition of the groups.
-- **Letting the 2-D MDS scatter define groups.** Keep MDS only as the eigenvalue diagnostic above, if at all.
-- **Ward linkage** (imposes spherical structure) and **`SOS != 0` as the overlap mask** (drops equal-representation cells), per above.
+- **UMAP / t-SNE at this n.** They are unreliable at n ≈ 100 and manufacture clusters from noise. They also build *relative* neighbourhoods, whereas the question needs an absolute notion of "similar enough".
+- **Letting the 2-D MDS scatter define groups.** It is a view for browsing only.
+- **Ward linkage.** It imposes spherical, Euclidean block structure.
+- **A per-space percentile cut, or any rule that fixes the proportion of pairs that count as similar.** It makes the answer relative to each space and imposes the result.
 
 ## Two-space interpretation
 
-The environmental and geographic distances are not comparable in magnitude — environmental "occupancy" is over tens of climate bins, geographic over ~18k cells — so do not read the two ordinations/heatmaps as if their axes or distances share units. Treat them as two different questions: the geographic analysis asks whether two nodes mark *the same specific break*; the environmental analysis asks whether they mark *the same kind of transition, abstracted from location*. That asymmetry is information. A pair similar in environmental but not geographic space marks the same climatic transition in different places — itself a substantive pattern.
+Treat the two spaces as two questions and do not compare magnitudes between them.
+- **Geographic:** do two nodes mark *the same specific break*?
+- **Environmental:** do they mark *the same kind of climatic transition*, abstracted from location?
 
-The environmental MDS also rings, which most likely means the same thing there: even though clades share climate bins, their SOS *patterns over* those bins are mostly mutually orthogonal, because co-occupancy of a bin does not imply the same daughter dominates it. Confirm on the environmental heatmap; expect "mostly uniform background + a few hot pairs" there too.
+A pair similar in environmental but not geographic space marks the same climatic transition in different places, which is itself a substantive pattern.
 
-## Reporting
+## Follow-up
 
-If the heatmaps show mostly uniform background with a few off-diagonal hot pairs and no substantial blocks, that null result — *the divergent nodes are largely idiosyncratic in SOS pattern, with a small number of co-patterned exceptions (name them)* — is the scientific finding and should be reported as such, with the heatmap as the evidence. Do not escalate to more aggressive embedding or clustering in order to produce groups the distances do not support.
-
-## Implementation touch-points
-
-- `Nodiv`: `sos_distances(res, nodes; …)` — the distance definition lives here. Read its current body first; verify the overlap mask and the sign handling, add the minimum-overlap guard and |r| folding, and expose the overlap-weighting option. Keep the existing call signature so `script.jl` is unaffected.
-- `script.jl`: replace `sos_mds_plot` with a clustered-heatmap-plus-dendrogram routine as the primary view; keep an MDS eigenvalue diagnostic available; add the graph/community-detection path as a secondary. Run separately for `res_e` and `res_g` on the `divergent` node set, and do not cross-compare magnitudes between the two.
+A data-chosen number of patterns would need a valid null: surrogate SOS maps that preserve their autocorrelation, as in spin or shift tests. These don't fit easily on a non-toroidal geographic grid or on the environmental bins. Block resampling of cells would likewise give more honest cluster support than independent resampling. Neither is needed for the current method.
