@@ -24,7 +24,7 @@ include("functions.jl")
 set_theme!(; colormap=Reverse(:Spectral))
 
 tree = sort!(parsenewick(read("data/clean/tree.nwk", String)))
-traits = CSV.read("data/clean/traits.csv", DataFrame)
+avonet = CSV.read("data/clean/traits.csv", DataFrame)
 
 # The assemblage of one space ("e" or "g"), built as in script.jl (the cache holds only
 # the results)
@@ -35,7 +35,7 @@ function assemblage(suffix, siteid)
     sitestats[!, siteid] = string.(sitestats[!, siteid])
     birds = Assemblage(phylocom, coords)
     addsitestats!(birds, sitestats, siteid)
-    addtraits!(birds, traits, :species)
+    addtraits!(birds, avonet, :species)
     return birds
 end
 birds_e = assemblage("e", :ID_env)
@@ -60,6 +60,10 @@ end
 explorer_fig_e, explorer_e = explorer(birds_e, res_e)
 explorer_fig_g, explorer_g = explorer(birds_g, res_g)
 link_explorers!(tree, explorer_e, explorer_g)
+for (ex, birds) in ((explorer_e, birds_e), (explorer_g, birds_g))
+    taxa_hover!(ex, birds, tree)
+    taxa_image_hover!(ex, birds)
+end
 
 screens = [
     display(GLMakie.Screen(; title="Environmental space"), explorer_fig_e),

@@ -100,6 +100,9 @@ never recomputes the analysis). It opens the two linked explorers, environmental
 geographic, each in its own window, and ends when both windows are closed. Getting to the
 windows takes a few minutes, mostly loading and compiling the packages.
 
+Hovering over a node in an explorer shows the families below it (or, for a single family,
+its genera), and hovering over a species image shows the species' family and order.
+
 ### Species images (optional, not in the repo)
 
 The explorers can show Birds of the World illustrations: around the tree, one per clade,
@@ -125,3 +128,11 @@ julia --project=. -e 'using Pkg; Pkg.develop(path="/path/to/Nodiv")'
 
 and `Pkg.free("Nodiv")` to switch back. (Keep the dev override out of the committed
 `Project.toml`/`Manifest.toml`.)
+
+After updating NodivMakie, run the tests of `functions.jl`. The explorers' hover labels
+for the species images use NodivMakie internals, and the tests catch an update that
+breaks them:
+
+```bash
+julia --project=. test/runtests.jl
+```

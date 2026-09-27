@@ -162,6 +162,11 @@ explorer_fig_g, explorer_g = node_explorer(
 # Link the two: a node picked in one space is shown in the other too, if it has an SOS there
 link_explorers!(tree, explorer_e, explorer_g)
 
+for (explorer, birds) in ((explorer_e, birds_e), (explorer_g, birds_g))
+    taxa_hover!(explorer, birds, tree)
+    taxa_image_hover!(explorer, birds)
+end
+
 # Each explorer in its own window (NODIVWORKSHOP_WINDOWS=false skips this, e.g. headless)
 const SHOW_WINDOWS = isinteractive() && get(ENV, "NODIVWORKSHOP_WINDOWS", "true") != "false"
 if SHOW_WINDOWS
@@ -476,6 +481,8 @@ trait_fig, trait_explorer_tree = trait_explorer(
     explorer_options.images,
     explorer_options.imageoptions,
 )
+taxa_hover!(trait_explorer_tree, birds_g, tree)
+taxa_image_hover!(trait_explorer_tree, birds_g)
 if SHOW_WINDOWS
     display(GLMakie.Screen(), trait_fig)
 end
