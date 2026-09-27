@@ -2,8 +2,9 @@
 
 An analysis in progress with [Nodiv.jl](https://github.com/mkborregaard/Nodiv.jl): the
 node-based SOS/GND analysis of birds in environmental and geographic space.
-`preprocess.jl` prepares the inputs. `script.jl` is worked through interactively, a line or
-block at a time and not necessarily in order; it is not meant to be run top to bottom.
+`preprocess.jl` prepares the inputs and `create_objects.jl` builds the tree and the
+assemblages from them. `script.jl` is worked through interactively, a line or block at a
+time and not necessarily in order; it is not meant to be run top to bottom.
 `explorer.jl` opens the interactive node explorers straight from a terminal.
 Helper functions that are finished live in `functions.jl`, which the script `include`s;
 functions still being developed stay in the script. Once finished, general analysis code
@@ -22,7 +23,8 @@ shared Google Drive folder that contains two subfolders:
 
 ```
 <Google Drive>/…/EnvSpace_Workshop/Nodiv project data/NodivWorkshop/
-├── data/      # raw RDS, cleaned inputs + the cached node_analysis.jld2 (res_e / res_g)
+├── data/      # raw RDS, cleaned inputs, objects.jld2 (tree, birds_e / birds_g)
+│              # and the cached node_analysis.jld2 (res_e / res_g)
 └── figures/   # outputs
 ```
 
@@ -32,9 +34,18 @@ In a working clone, `data/` and `figures/` are **symlinks** into that Drive fold
 
 `preprocess.jl` reads the matched raw data, `data/data_birds_matched_simplified.rds`
 (phylogeny, presences and grids for both spaces, and AVONET traits), through RCall, so it
-needs R with the `sf` and `ape` packages. It writes the cleaned CSVs and the pruned tree
-that `script.jl` loads. The geographic grid is a Behrmann equal-area grid, so its cells are
-placed on an exact regular grid in Behrmann coordinates (km).
+needs R with the `sf` and `ape` packages. It writes the cleaned CSVs and the pruned tree.
+The geographic grid is a Behrmann equal-area grid, so its cells are placed on an exact
+regular grid in Behrmann coordinates (km).
+
+`create_objects.jl` reads the cleaned inputs, builds the tree and the two assemblages
+(`birds_e`, `birds_g`, with their site covariates and traits) and caches them in
+`data/objects.jld2`, which `script.jl` and `explorer.jl` load. Re-run it whenever
+`preprocess.jl` has been re-run:
+
+```bash
+julia --project=. create_objects.jl
+```
 
 ## Setup on a new machine
 
@@ -95,10 +106,11 @@ terminal:
 julia explorer.jl
 ```
 
-It needs the setup above and the cached `data/node_analysis.jld2`, which it loads (it
-never recomputes the analysis). It opens the two linked explorers, environmental and
-geographic, each in its own window, and ends when both windows are closed. Getting to the
-windows takes a few minutes, mostly loading and compiling the packages.
+It needs the setup above and the caches `data/objects.jld2` and `data/node_analysis.jld2`,
+which it loads (it never recomputes the analysis). It opens the two linked explorers,
+environmental and geographic, each in its own window, and ends when both windows are
+closed. Getting to the windows takes a few minutes, mostly loading and compiling the
+packages.
 
 Hovering over a node in an explorer shows the families below it (or, for a single family,
 its genera), and hovering over a species image shows the species' family and order.

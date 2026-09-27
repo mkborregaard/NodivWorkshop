@@ -1,6 +1,6 @@
 # Preprocessing for the Nodiv bird analysis. Reads the matched raw data from
 # data/data_birds_matched_simplified.rds (an R list: phylogeny, e_space, g_space,
-# traits) and writes cleaned inputs to data/clean/ that `script.jl` then loads:
+# traits) and writes cleaned inputs to data/clean/ that `create_objects.jl` then loads:
 #   - tree.nwk                                the pruned phylogeny, taxon-named nodes
 #   - phylocom_e/g.csv, coords_e/g.csv,       per-space occurrences, coordinates,
 #     sitestats_e/g.csv                       and site covariates (e = env, g = geo)

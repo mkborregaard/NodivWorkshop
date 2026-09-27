@@ -1,13 +1,11 @@
 # Node-based analysis of bird diversity, in environmental (birds_e) and geographic
-# (birds_g) space. Run preprocess.jl first to build the cleaned inputs in
-# data/clean/; this script loads them, builds the assemblages, computes and caches
-# the node analysis, and explores the results.
+# (birds_g) space. Run preprocess.jl and then create_objects.jl first; this script loads
+# the objects, computes and caches the node analysis, and explores the results.
 #
 # Plotting is Makie: NodivMakie for trees, maps and node panels, GLMakie for interactive
 # windows. Run it in the REPL or VS Code; each figure is kept in a variable, so evaluate
 # the variable to show it again.
 
-using CSV
 # CairoMakie only for saving vector (PDF) files; GLMakie saves raster formats
 using CairoMakie: CairoMakie
 using DataFrames
@@ -31,36 +29,10 @@ include("functions.jl")
 
 set_theme!(; colormap=Reverse(:Spectral))
 
-### ---- Load the cleaned inputs (from preprocess.jl) and build the assemblages ---- ###
+### ---- Load the objects (from create_objects.jl) ---- ###
 
-tree = sort!(parsenewick(read("data/clean/tree.nwk", String)))
-phylocom_e = string_sites!(CSV.read("data/clean/phylocom_e.csv", DataFrame))
-coords_e = string_sites!(CSV.read("data/clean/coords_e.csv", DataFrame))
-sitestats_e = CSV.read("data/clean/sitestats_e.csv", DataFrame)
-phylocom_g = string_sites!(CSV.read("data/clean/phylocom_g.csv", DataFrame))
-coords_g = string_sites!(CSV.read("data/clean/coords_g.csv", DataFrame))
-sitestats_g = CSV.read("data/clean/sitestats_g.csv", DataFrame)
-sitestats_g.ID_geo = string.(sitestats_g.ID_geo)
-avonet = CSV.read("data/clean/traits.csv", DataFrame)
-
-# coordinates were pre-aligned to each phylocom's site order in preprocessing, so
-# they slot straight into the Assemblage (SpatialEcology aligns coords by row order).
-birds_e = Assemblage(phylocom_e, coords_e)
-addsitestats!(birds_e, sitestats_e, :ID_env)   # PC bins, area, occupancy, ...
-addtraits!(birds_e, avonet, :species)
-richness_e = map_figure(birds_e; title="Environmental: species richness", label="species")
-# save("figures/Env species richness.png", richness_e)
-
-birds_g = Assemblage(phylocom_g, coords_g)
-addsitestats!(birds_g, sitestats_g, :ID_geo)   # CHELSA bioclim, PC1-3, area, ...
-addtraits!(birds_g, avonet, :species)
-richness_g = map_figure(
-    birds_g;
-    title="Geographic: species richness",
-    label="species",
-    figure=(; size=(1000, 500)),
-)
-# save("figures/Geo species richness.png", richness_g)
+const OBJECTFILE = "data/objects.jld2"
+tree, birds_e, birds_g = load(OBJECTFILE, "tree", "birds_e", "birds_g")
 
 ### ---- Heavy step: divergence metrics + SOS for every node, cached to disk ---- ###
 # `node_metrics` computes the divergence metrics (GND, RMS-SOS, ...) together with the
@@ -90,6 +62,17 @@ const MINOVERLAP = 3
 const SIMCUT = 0.7
 
 ### ---- Exploratory plotting (from the cached NodeMetrics; `_e` vs `_g`) ---- ###
+
+richness_e = map_figure(birds_e; title="Environmental: species richness", label="species")
+# save("figures/Env species richness.png", richness_e)
+
+richness_g = map_figure(
+    birds_g;
+    title="Geographic: species richness",
+    label="species",
+    figure=(; size=(1000, 500)),
+)
+# save("figures/Geo species richness.png", richness_g)
 
 # Strongly divergent nodes in each space (`METRIC` above `THRESHOLD`)
 divergent_e = divergent_nodes(res_e; by=METRIC, threshold=THRESHOLD)

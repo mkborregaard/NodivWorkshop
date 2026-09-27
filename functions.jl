@@ -1,14 +1,3 @@
-"""
-    string_sites!(df)
-
-Convert the `site` column of `df` to strings, so site ids read by CSV stay strings.
-Returns `df`.
-"""
-function string_sites!(df)
-    df.site = string.(df.site)
-    return df
-end
-
 # The trait rows (from `addtraits!`) of the species in `asm` that descend from `node`
 function _clade_traits(asm, tree, node)
     species = Set(nodespecies(tree, node))
