@@ -106,6 +106,21 @@ end
         @test size(Makie.colorbuffer(fig)) != (0, 0)
     end
 
+    @testset "color_by_clusters!" begin
+        fig, ex = node_explorer(asm, tree, res; nodes=:all)
+        nodes = ex.ordination.ordination[].nodes
+        clusters = sos_clusters(sos_distances(res, nodes), nodes; simcut=0.5)
+        color_by_clusters!(ex, clusters)
+        colors = cluster_colors(length(clusters.labels))
+        for (n, c) in clusters.groups
+            expected = haskey(clusters.labels, c) ? colors[clusters.labels[c]] : :gray70
+            @test ex.ordination.nodecolor[][n] == to_color(expected)
+        end
+        i = findfirst(==("n2"), nodes)
+        @test ex.ordination.point_colors[][i] == ex.ordination.nodecolor[]["n2"]
+        @test size(Makie.colorbuffer(fig)) != (0, 0)
+    end
+
     @testset "explorer_tree! hover labels" begin
         # the tree of an explorer with other panels, as in trait_explorer
         fig = Figure()

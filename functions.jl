@@ -67,6 +67,24 @@ function taxa_hover!(explorer, asm, tree)
 end
 
 """
+    color_by_clusters!(explorer, clusters; unclustered=:gray70)
+
+Colour the points of the ordination of `explorer` (from `node_explorer`) by their cluster
+in `clusters` (from Nodiv's `sos_clusters`), in the colours of `sos_cluster_heatmap` and
+`cluster_tree`. The nodes in no cluster of more than one node get `unclustered`. Returns
+`explorer`.
+"""
+function color_by_clusters!(explorer, clusters; unclustered=:gray70)
+    explorer.ordination === nothing && return explorer
+    colors = cluster_colors(length(clusters.labels))
+    explorer.ordination.nodecolor = Dict(
+        n => haskey(clusters.labels, c) ? colors[clusters.labels[c]] : to_color(unclustered)
+        for (n, c) in clusters.groups
+    )
+    return explorer
+end
+
+"""
     taxa_image_hover!(explorer, asm)
 
 Add the family and order under the species name in the hover labels of the species images

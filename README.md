@@ -88,7 +88,8 @@ The interactive entry point is the **node explorer**, one per space
 (`explorer_fig_e`, `explorer_fig_g`). In a REPL they open in their own windows. Each shows
 the fan tree with the divergent nodes marked, next to the node's SOS map, the richness of
 its two child clades, and an ordination (MDS) of the divergent nodes by the similarity of
-their SOS maps.
+their SOS maps, coloured by their SOS cluster (the colours of `heat_g` and
+`tree_clusters_g`; grey for nodes in no cluster).
 - Click a node marker, or the branch leading to a node, to show that node. Clicking a
   point in the ordination does the same; the node shown has a ring there.
 - Hover over nodes, branches, ordination points and map cells for labels.

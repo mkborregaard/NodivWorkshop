@@ -77,7 +77,6 @@ richness_g = map_figure(
 # Strongly divergent nodes in each space (`METRIC` above `THRESHOLD`)
 divergent_e = divergent_nodes(res_e; by=METRIC, threshold=THRESHOLD)
 divergent_g = divergent_nodes(res_g; by=METRIC, threshold=THRESHOLD)
-divergent = divergent_e ∩ divergent_g
 
 # The metric of just the divergent nodes mapped onto the tree (markers only at `nodes`:
 # a node missing from the Dict would get a transparent fill but still its outline).
@@ -121,53 +120,6 @@ sosmap_g = map_figure(
     figure=(; size=(1000, 500)),
 )
 # save("figures/Geo SOS $focal_g.png", sosmap_g)
-
-# The interactive entry point: the fan tree with the divergent nodes marked, next to the
-# SOS map and the two child clades' maps, and an ordination of the divergent nodes by
-# SOS-pattern similarity. Each opens on its space's most divergent node (focal_e, focal_g
-# above). Click a node or a branch on the tree, or a point in the ordination, to show that
-# node; hover for labels. The Birds of the World images in bow_images/ are private and not
-# in the repo: they are used only if that folder is there.
-const IMAGEDIR = "bow_images/workshop_species"
-explorer_options = (;
-    metric=METRIC,
-    images=isdir(IMAGEDIR) ? IMAGEDIR : nothing,
-    imageoptions=(; whitebackground=true),
-    ordinationkw=(; minoverlap=MINOVERLAP),
-)
-explorer_fig_e, explorer_e = node_explorer(
-    birds_e, tree, res_e; nodes=divergent_e, explorer_options...
-)
-explorer_fig_g, explorer_g = node_explorer(
-    birds_g, tree, res_g; nodes=divergent_g, explorer_options...
-)
-
-# Link the two: a node picked in one space is shown in the other too, if it has an SOS there
-link_explorers!(tree, explorer_e, explorer_g)
-
-for (explorer, birds) in ((explorer_e, birds_e), (explorer_g, birds_g))
-    taxa_hover!(explorer, birds, tree)
-    taxa_image_hover!(explorer, birds)
-end
-
-# Each explorer in its own window (NODIVWORKSHOP_WINDOWS=false skips this, e.g. headless)
-const SHOW_WINDOWS = isinteractive() && get(ENV, "NODIVWORKSHOP_WINDOWS", "true") != "false"
-if SHOW_WINDOWS
-    display(GLMakie.Screen(), explorer_fig_e)
-    display(GLMakie.Screen(), explorer_fig_g)
-end
-
-# Ordinate the divergent nodes of both spaces by SOS-pattern similarity (cached SOS ->
-# `sos_distances` -> classical MDS in `sos_ordination`, both from Nodiv)
-D_g = sos_distances(res_g, divergent; minoverlap=MINOVERLAP)
-D_e = sos_distances(res_e, divergent; minoverlap=MINOVERLAP)
-function sos_mds_scatter(D, nodes, title)
-    return ordinationplot(sos_ordination(D, nodes); nodelabels=true, axis=(; title)).figure
-end
-mds_e = sos_mds_scatter(D_e, divergent, "Environmental: SOS-pattern similarity")
-# save("figures/Env SOS-pattern similarity.png", mds_e)
-mds_g = sos_mds_scatter(D_g, divergent, "Geographic: SOS-pattern similarity")
-# save("figures/Geo SOS-pattern similarity.png", mds_g)
 
 # Parent/SOS/children panel for one node (4th arg = cached SOS, no recompute); also
 # `explorer_e.panel.node[] = focal` shows it in the explorer
@@ -230,33 +182,34 @@ nspecies_scatter = scatter(
 # save("figures/Geo $METRIC vs clade species.png", nspecies_scatter)
 
 ### ---- Grouping divergent nodes by SOS-pattern similarity ---- ###
-# The MDS scatter (`sos_mds_scatter`) above is read together with its eigenvalue diagnostic
-# (1); the primary read is the complete-linkage clustered heatmap (2), with a thresholded
-# similarity graph (3) as the confirmatory secondary. Distances come from `sos_distances`
-# in Nodiv: 1 - |r| over the shared occupied cells, with the minimum-overlap floor
-# `MINOVERLAP`. Each space's distances are computed once and every view is derived from
-# them. The two spaces are run separately and their magnitudes are NOT compared
-# (environmental "occupancy" is over tens of PC bins, geographic over ~18k cells).
+# The primary read is the complete-linkage clustered heatmap (2), with a thresholded
+# similarity graph (3) as the confirmatory secondary; the MDS ordination in the explorers
+# below is read together with its eigenvalue diagnostic (1). Distances come from
+# `sos_distances` in Nodiv: 1 - |r| over the shared occupied cells, with the minimum-overlap
+# floor `MINOVERLAP`. Each space's distances are computed once and every view is derived
+# from them. Each space is run on its own divergent nodes, and their magnitudes are NOT
+# compared (environmental "occupancy" is over tens of PC bins, geographic over ~18k cells).
+D_g = sos_distances(res_g, divergent_g; minoverlap=MINOVERLAP)
+D_e = sos_distances(res_e, divergent_e; minoverlap=MINOVERLAP)
 
-### ---- Run both spaces on the divergent set (no cross-space magnitude comparison) ---- ###
 # (1) ONE-TIME DIAGNOSTIC, not the analysis. Fit MDS at a higher dimension and look at the
-# eigenvalue spectrum: if axes 3+ carry weight comparable to axes 1-2, the 2-D scatter is a
-# projection artefact and the "ring" is the honest report of near-equidistance.
+# eigenvalue spectrum: if axes 3+ carry weight comparable to axes 1-2, the 2-D ordination is
+# a projection artefact and the "ring" is the honest report of near-equidistance.
 mds_eig_g = eigenvalueplot(
-    sos_ordination(D_g, divergent; maxoutdim=10);
-    axis=(; title="Geographic: MDS eigenvalues (n = $(length(divergent)))"),
+    sos_ordination(D_g, divergent_g; maxoutdim=10);
+    axis=(; title="Geographic: MDS eigenvalues (n = $(length(divergent_g)))"),
 ).figure
 # save("figures/Geo MDS eigenvalues.png", mds_eig_g)
 mds_eig_e = eigenvalueplot(
-    sos_ordination(D_e, divergent; maxoutdim=10);
-    axis=(; title="Environmental: MDS eigenvalues (n = $(length(divergent)))"),
+    sos_ordination(D_e, divergent_e; maxoutdim=10);
+    axis=(; title="Environmental: MDS eigenvalues (n = $(length(divergent_e)))"),
 ).figure
 # save("figures/Env MDS eigenvalues.png", mds_eig_e)
 
 # (2) PRIMARY VIEW. Complete-linkage hierarchical clustering, cut at |r| >= SIMCUT, drawn
 # as a dendrogram-ordered |r| heatmap
-clusters_g = sos_clusters(D_g, divergent; simcut=SIMCUT)
-clusters_e = sos_clusters(D_e, divergent; simcut=SIMCUT)
+clusters_g = sos_clusters(D_g, divergent_g; simcut=SIMCUT)
+clusters_e = sos_clusters(D_e, divergent_e; simcut=SIMCUT)
 
 heat_g = sos_cluster_heatmap(clusters_g; title="Geographic: SOS clusters")
 # save("figures/Geo SOS clusters.png", heat_g)
@@ -265,8 +218,8 @@ heat_e = sos_cluster_heatmap(clusters_e; title="Environmental: SOS clusters")
 
 # (3) SECONDARY / CONFIRMATORY. Modularity communities of the similarity graph with edges at
 # |r| >= SIMCUT
-communities_g = sos_similarity_communities(D_g, divergent; simthresh=SIMCUT)
-communities_e = sos_similarity_communities(D_e, divergent; simthresh=SIMCUT)
+communities_g = sos_similarity_communities(D_g, divergent_g; simthresh=SIMCUT)
+communities_e = sos_similarity_communities(D_e, divergent_e; simthresh=SIMCUT)
 
 # Clusters mapped back onto the phylogeny (numbers and colours match the heatmap outlines)
 tree_clusters_g = cluster_tree(
@@ -286,32 +239,78 @@ display(communities_g)
 display(clusters_e)
 display(communities_e)
 
-### ---- Two node-level views of the divergent set ---- ###
+### ---- The node explorers ---- ###
+
+# The interactive entry point: the fan tree with the divergent nodes marked, next to the
+# SOS map and the two child clades' maps, and an ordination of the divergent nodes by
+# SOS-pattern similarity, coloured by their SOS cluster above (grey: in no cluster). Each
+# opens on its space's most divergent node (focal_e, focal_g above). Click a node or a
+# branch on the tree, or a point in the ordination, to show that node; hover for labels.
+# The Birds of the World images in bow_images/ are private and not in the repo: they are
+# used only if that folder is there.
+const IMAGEDIR = "bow_images/workshop_species"
+explorer_options = (;
+    metric=METRIC,
+    images=isdir(IMAGEDIR) ? IMAGEDIR : nothing,
+    imageoptions=(; whitebackground=true),
+    ordinationkw=(; minoverlap=MINOVERLAP),
+)
+explorer_fig_e, explorer_e = node_explorer(
+    birds_e, tree, res_e; nodes=divergent_e, explorer_options...
+)
+explorer_fig_g, explorer_g = node_explorer(
+    birds_g, tree, res_g; nodes=divergent_g, explorer_options...
+)
+
+# Link the two: a node picked in one space is shown in the other too, if it has an SOS there
+link_explorers!(tree, explorer_e, explorer_g)
+
+for (explorer, birds, clusters) in
+    ((explorer_e, birds_e, clusters_e), (explorer_g, birds_g, clusters_g))
+    taxa_hover!(explorer, birds, tree)
+    taxa_image_hover!(explorer, birds)
+    color_by_clusters!(explorer, clusters)
+end
+
+# Each explorer in its own window (NODIVWORKSHOP_WINDOWS=false skips this, e.g. headless)
+const SHOW_WINDOWS = isinteractive() && get(ENV, "NODIVWORKSHOP_WINDOWS", "true") != "false"
+if SHOW_WINDOWS
+    display(GLMakie.Screen(), explorer_fig_e)
+    display(GLMakie.Screen(), explorer_fig_g)
+end
+
+### ---- Two node-level views of each space's divergent nodes ---- ###
 
 # Fan tree showing ONLY the divergent nodes, each labelled with its name in a small pale box
 # so it stays readable over the branches; the rest of the tree is a plain grey skeleton. The
 # boxes will overlap if packed too tightly, so widen the figure size (or drop
 # `nodelabelsize`) until they clear; the redundant "Node " is dropped so the boxes stay
 # small.
-divergent_tree = treeplot(
-    tree;
-    treetype=:fan,
-    showtips=false,
-    branchcolor=:gray75,
-    nodelabels=Dict(n => replace(n, "Node " => "") for n in divergent),
-    nodelabelbackground=(:lightyellow, 0.85),
-    nodelabelsize=11,
-    nodelabelalign=(:center, :center),
-    nodelabeloffset=(0, 0),
-    figure=(; size=(1600, 1600)),
-).figure
-# save("figures/Divergent nodes labelled.png", divergent_tree)
+function labelled_tree(nodes, title)
+    return treeplot(
+        tree;
+        treetype=:fan,
+        showtips=false,
+        branchcolor=:gray75,
+        nodelabels=Dict(n => replace(n, "Node " => "") for n in nodes),
+        nodelabelbackground=(:lightyellow, 0.85),
+        nodelabelsize=11,
+        nodelabelalign=(:center, :center),
+        nodelabeloffset=(0, 0),
+        axis=(; title),
+        figure=(; size=(1600, 1600)),
+    ).figure
+end
+divergent_tree_g = labelled_tree(divergent_g, "Geographic: divergent nodes")
+# save("figures/Geo divergent nodes labelled.png", divergent_tree_g)
+divergent_tree_e = labelled_tree(divergent_e, "Environmental: divergent nodes")
+# save("figures/Env divergent nodes labelled.png", divergent_tree_e)
 # node_panel_pdf(
-#     birds_g, tree, divergent, res_g, "figures/divergent_node_panels_geo.pdf";
+#     birds_g, tree, divergent_g, res_g, "figures/divergent_node_panels_geo.pdf";
 #     backend=CairoMakie,
 # )
 # node_panel_pdf(
-#     birds_e, tree, divergent, res_e, "figures/divergent_node_panels_env.pdf";
+#     birds_e, tree, divergent_e, res_e, "figures/divergent_node_panels_env.pdf";
 #     backend=CairoMakie,
 # )
 

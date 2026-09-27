@@ -28,16 +28,19 @@ res_e, res_g = load("data/node_analysis.jld2", "res_e", "res_g")
 # The same settings as the explorers in script.jl
 const IMAGEDIR = "bow_images/workshop_species"
 function explorer(birds, res)
-    return node_explorer(
+    nodes = divergent_nodes(res; by=:rms, threshold=2)
+    fig, ex = node_explorer(
         birds,
         tree,
         res;
         metric=:rms,
-        nodes=divergent_nodes(res; by=:rms, threshold=2),
+        nodes,
         images=isdir(IMAGEDIR) ? IMAGEDIR : nothing,
         imageoptions=(; whitebackground=true),
         ordinationkw=(; minoverlap=3),
     )
+    clusters = sos_clusters(sos_distances(res, nodes; minoverlap=3), nodes; simcut=0.7)
+    return fig, color_by_clusters!(ex, clusters)
 end
 explorer_fig_e, explorer_e = explorer(birds_e, res_e)
 explorer_fig_g, explorer_g = explorer(birds_g, res_g)
