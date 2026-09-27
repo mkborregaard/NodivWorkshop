@@ -141,6 +141,7 @@ metric_scatter = scatter(
     dat.log_g, dat.log_e; axis=(; xlabel="log geo $METRIC", ylabel="log env $METRIC")
 )
 ablines!(metric_scatter.axis, 0, 1; color=:red)  # The 1:1 line
+metric_scatter
 # save("figures/Env vs geo $METRIC.png", metric_scatter)
 
 rms_fit = lm(@formula(log_e ~ log_g), dat)
@@ -164,6 +165,7 @@ occupied_tree = let
     Colorbar(fig[1, 2], p; label="occupied env sites")
     fig
 end
+occupied_tree
 # save("figures/Env occupied sites treeplot.png", occupied_tree)
 
 occupied_scatter = scatter(
@@ -171,6 +173,7 @@ occupied_scatter = scatter(
     [metric_e[n] for n in allnodes];
     axis=(; xlabel="occupied env sites", ylabel="env $METRIC"),
 )
+occupied_scatter
 # save("figures/Env $METRIC vs occupied sites.png", occupied_scatter)
 
 nspecies_g = Dict(node => length(nodespecies(tree, node)) for node in allnodes)
