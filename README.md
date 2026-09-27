@@ -5,6 +5,10 @@ node-based SOS/GND analysis of birds in environmental and geographic space.
 `preprocess.jl` prepares the inputs and `create_objects.jl` builds the tree and the
 assemblages from them. `script.jl` is worked through interactively, a line or block at a
 time and not necessarily in order; it is not meant to be run top to bottom.
+`traitsscript.jl`, worked through the same way, is the separate analysis of the clades'
+traits (a PCA of the AVONET morphometrics, a trait explorer and the child clades' overlap
+in trait space); it starts from the objects and the node analysis cached by
+`create_objects.jl` and `script.jl`.
 `explorer.jl` opens the interactive node explorers straight from a terminal.
 Helper functions that are finished live in `functions.jl`, which the script `include`s;
 functions still being developed stay in the script. Once finished, general analysis code
@@ -40,8 +44,8 @@ regular grid in Behrmann coordinates (km).
 
 `create_objects.jl` reads the cleaned inputs, builds the tree and the two assemblages
 (`birds_e`, `birds_g`, with their site covariates and traits) and caches them in
-`data/objects.jld2`, which `script.jl` and `explorer.jl` load. Re-run it whenever
-`preprocess.jl` has been re-run:
+`data/objects.jld2`, which `script.jl`, `traitsscript.jl` and `explorer.jl` load. Re-run it
+whenever `preprocess.jl` has been re-run:
 
 ```bash
 julia --project=. create_objects.jl

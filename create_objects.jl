@@ -1,6 +1,6 @@
 # Build the analysis objects from the cleaned inputs in data/clean/ (written by
-# preprocess.jl) and cache them in data/objects.jld2, which script.jl and explorer.jl
-# load:
+# preprocess.jl) and cache them in data/objects.jld2, which script.jl, traitsscript.jl
+# and explorer.jl load:
 #   - tree               the phylogeny, ladderized
 #   - birds_e, birds_g   the assemblages of each space (e = env, g = geo), with their site
 #                        covariates and the AVONET traits
