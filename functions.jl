@@ -25,6 +25,16 @@ function families(asm, tree, node)
     return sort!(unique(String.(_clade_traits(asm, tree, node).Family1)))
 end
 
+"""
+    orders(asm, tree, node)
+
+The sorted orders (the AVONET `Order1` trait) of the species in `asm` that descend from
+`node` in `tree`.
+"""
+function orders(asm, tree, node)
+    return sort!(unique(String.(_clade_traits(asm, tree, node).Order1)))
+end
+
 # `taxa` as lines of `perline`, cut to the first `n`
 function _taxa_list(taxa, n; perline=4)
     shown = first(taxa, n)
@@ -36,16 +46,24 @@ function _taxa_list(taxa, n; perline=4)
 end
 
 """
-    taxa_text(asm, tree, node; nfamilies=8, ngenera=6)
+    taxa_text(asm, tree, node; norders=4, nfamilies=8, ngenera=6)
 
-The taxa of the species in `asm` below `node`, for a hover label: the first `nfamilies`
-families if there are several, else the family and its first `ngenera` genera.
+The taxa of the species in `asm` below `node`, for a hover label: the order (or the
+orders, if there are several, the first `norders`), then the first `nfamilies` families if there are several,
+else the family and its first `ngenera` genera.
 """
-function taxa_text(asm, tree, node; nfamilies=8, ngenera=6)
+function taxa_text(asm, tree, node; norders=4, nfamilies=8, ngenera=6)
     fams = families(asm, tree, node)
     isempty(fams) && return ""
-    length(fams) > 1 && return "$(length(fams)) families:\n" * _taxa_list(fams, nfamilies)
-    return only(fams) * "\n" * _taxa_list(genera(asm, tree, node), ngenera)
+    ords = orders(asm, tree, node)
+    head = if length(ords) > 1
+        "$(length(ords)) orders:\n" * _taxa_list(ords, norders; perline=3)
+    else
+        only(ords)
+    end
+    length(fams) > 1 &&
+        return head * "\n$(length(fams)) families:\n" * _taxa_list(fams, nfamilies)
+    return head * "\n" * only(fams) * "\n" * _taxa_list(genera(asm, tree, node), ngenera)
 end
 
 """
