@@ -196,6 +196,29 @@ clusters_e = sos_clusters(D_e, divergent_e; simcut=SIMCUT)
 display(clusters_g)
 display(clusters_e)
 
+# The divergent nodes ordinated by SOS-pattern similarity (classical MDS of the distances
+# above, `sos_ordination` in Nodiv), numbered and coloured by their cluster (grey: on its
+# own). A 2-D projection, so its distances are approximate; the clusters come from the full
+# distances.
+function sos_mds_scatter(D, nodes, clusters, title)
+    return ordinationplot(
+        sos_ordination(D, nodes);
+        nodelabels=true,
+        nodecolor=cluster_nodecolors(clusters),
+        axis=(; title),
+    ).figure
+end
+mds_g = sos_mds_scatter(
+    D_g, divergent_g, clusters_g, "Geographic: SOS-pattern similarity"
+)
+mds_g
+# save("figures/Geo SOS-pattern similarity.png", mds_g)
+mds_e = sos_mds_scatter(
+    D_e, divergent_e, clusters_e, "Environmental: SOS-pattern similarity"
+)
+mds_e
+# save("figures/Env SOS-pattern similarity.png", mds_e)
+
 # Clusters mapped back onto the phylogeny
 tree_clusters_g = cluster_tree(
     tree, clusters_g; title="Geographic: SOS clusters on the phylogeny"

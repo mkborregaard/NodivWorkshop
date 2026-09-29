@@ -67,20 +67,30 @@ function taxa_hover!(explorer, asm, tree)
 end
 
 """
-    color_by_clusters!(explorer, clusters; unclustered=:gray70)
+    cluster_nodecolors(clusters; unclustered=:gray70)
 
-Colour the points of the ordination of `explorer` (from `node_explorer`) by their cluster
-in `clusters` (from Nodiv's `sos_clusters`), in the colours of `sos_cluster_heatmap` and
-`cluster_tree`. The nodes in no cluster of more than one node get `unclustered`. Returns
-`explorer`.
+A Dict of node name => the colour of its cluster in `clusters` (from Nodiv's
+`sos_clusters`), in the colours of `sos_cluster_heatmap` and `cluster_tree`, for the
+`nodecolor` of an `ordinationplot`. The nodes in no cluster of more than one node get
+`unclustered`.
 """
-function color_by_clusters!(explorer, clusters; unclustered=:gray70)
-    explorer.ordination === nothing && return explorer
+function cluster_nodecolors(clusters; unclustered=:gray70)
     colors = cluster_colors(length(clusters.labels))
-    explorer.ordination.nodecolor = Dict(
+    return Dict(
         n => haskey(clusters.labels, c) ? colors[clusters.labels[c]] : to_color(unclustered)
         for (n, c) in clusters.groups
     )
+end
+
+"""
+    color_by_clusters!(explorer, clusters; unclustered=:gray70)
+
+Colour the points of the ordination of `explorer` (from `node_explorer`) by their cluster
+in `clusters`, as [`cluster_nodecolors`](@ref). Returns `explorer`.
+"""
+function color_by_clusters!(explorer, clusters; unclustered=:gray70)
+    explorer.ordination === nothing && return explorer
+    explorer.ordination.nodecolor = cluster_nodecolors(clusters; unclustered)
     return explorer
 end
 
