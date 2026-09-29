@@ -60,6 +60,7 @@ const SIMCUT = 0.6
 ### ---- Exploratory plotting (from the cached NodeMetrics; `_e` vs `_g`) ---- ###
 
 richness_e = map_figure(birds_e; title="Environmental: species richness", label="species")
+richness_e
 # save("figures/Env species richness.png", richness_e)
 
 richness_g = map_figure(
@@ -68,6 +69,7 @@ richness_g = map_figure(
     label="species",
     figure=(; size=(1000, 500)),
 )
+richness_g
 # save("figures/Geo species richness.png", richness_g)
 
 # Strongly divergent nodes in each space (`METRIC` above `THRESHOLD`)
@@ -84,6 +86,7 @@ metric_tree_e = metric_tree(
     nodes=divergent_e,
     title="Environmental: divergent nodes, $METRIC",
 )
+metric_tree_e
 # save("figures/Env divergent nodes treeplot.png", metric_tree_e)
 metric_tree_g = metric_tree(
     tree,
@@ -92,6 +95,7 @@ metric_tree_g = metric_tree(
     nodes=divergent_g,
     title="Geographic: divergent nodes, $METRIC",
 )
+metric_tree_g
 # save("figures/Geo divergent nodes treeplot.png", metric_tree_g)
 
 # SOS of the most divergent node mapped onto each space (cached SOS, no recompute)
@@ -104,6 +108,7 @@ sosmap_e = map_figure(
     title="Environmental: SOS of $focal_e",
     label="SOS",
 )
+sosmap_e
 # save("figures/Env SOS $focal_e.png", sosmap_e)
 focal_g = argmax(n -> metric_g[n], divergent_g)
 sosmap_g = map_figure(
@@ -115,6 +120,7 @@ sosmap_g = map_figure(
     label="SOS",
     figure=(; size=(1000, 500)),
 )
+sosmap_g
 # save("figures/Geo SOS $focal_g.png", sosmap_g)
 
 # Parent/SOS/children panel for one node (4th arg = cached SOS, no recompute); also
@@ -122,8 +128,10 @@ sosmap_g = map_figure(
 # Node names are numbered by data/clean/tree.nwk: re-running preprocess.jl renumbers them
 focal = "Node 17672"
 panel_e, _ = node_panel(birds_e, tree, focal, res_e)
+panel_e
 # save("figures/Env node panel $focal.png", panel_e)
 panel_g, _ = node_panel(birds_g, tree, focal, res_g)
+panel_g
 # save("figures/Geo node panel $focal.png", panel_g)
 
 allnodes = collect(keys(metric_e))
@@ -147,6 +155,7 @@ occupied_e = Dict(node => count(>(0), occupied_of(node)) for node in allnodes)
 occupied_hist = hist(
     collect(values(occupied_e)); axis=(; xlabel="occupied env sites", ylabel="nodes")
 )
+occupied_hist
 # save("figures/Env occupied sites histogram.png", occupied_hist)
 
 occupied_tree = let
@@ -178,6 +187,7 @@ nspecies_scatter = scatter(
     [metric_g[n] for n in allnodes];
     axis=(; xlabel="log number of species in clade", ylabel="geo $METRIC"),
 )
+nspecies_scatter
 # save("figures/Geo $METRIC vs clade species.png", nspecies_scatter)
 
 ### ---- Grouping divergent nodes by SOS-pattern similarity ---- ###
@@ -223,17 +233,21 @@ mds_e
 tree_clusters_g = cluster_tree(
     tree, clusters_g; title="Geographic: SOS clusters on the phylogeny"
 )
+tree_clusters_g
 # save("figures/Geo SOS clusters on the phylogeny.png", tree_clusters_g)
 tree_clusters_e = cluster_tree(
     tree, clusters_e; title="Environmental: SOS clusters on the phylogeny"
 )
+tree_clusters_e
 # save("figures/Env SOS clusters on the phylogeny.png", tree_clusters_e)
 
 # The |r| of every pair in dendrogram order, clusters outlined with the numbers and colours
 # of the tree above
 heat_g = sos_cluster_heatmap(clusters_g; title="Geographic: SOS clusters")
+heat_g
 # save("figures/Geo SOS clusters.png", heat_g)
 heat_e = sos_cluster_heatmap(clusters_e; title="Environmental: SOS clusters")
+heat_e
 # save("figures/Env SOS clusters.png", heat_e)
 
 ### ---- The node explorers ---- ###
