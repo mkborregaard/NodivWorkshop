@@ -20,6 +20,50 @@ panels and cluster figures, with GLMakie for interactive windows.
 `docs/sos_pattern_grouping_design.md` is the design spec for grouping the divergent nodes
 by SOS-pattern similarity.
 
+## Quick start: running the explorer
+
+1. Install Julia with [juliaup](https://github.com/JuliaLang/juliaup), then open a new
+   terminal:
+   - macOS: `curl -fsSL https://install.julialang.org | sh`
+   - Windows: `winget install julia -s msstore`
+2. Clone the repo and enter it:
+
+   ```bash
+   git clone https://github.com/mkborregaard/NodivWorkshop.git
+   cd NodivWorkshop
+   ```
+
+3. From the shared Drive folder `EnvSpace_Workshop/Nodiv project data/NodivWorkshop/data/`,
+   download `objects.jld2` and `node_analysis.jld2` into a new `data/` folder in the repo.
+4. Put the bird pictures (named like `Carduelis_hornemanni.jpg`) directly in
+   `bow_images/workshop_species/`. They are optional and ignored by git.
+
+   ```
+   NodivWorkshop/
+   ├── explorer.jl
+   ├── data/objects.jld2
+   ├── data/node_analysis.jld2
+   └── bow_images/workshop_species/*.jpg
+   ```
+
+5. Install the packages (once):
+
+   ```bash
+   julia --project=. -e "using Pkg; Pkg.instantiate()"
+   ```
+
+6. Run the explorer:
+
+   ```bash
+   julia explorer.jl
+   ```
+
+   Two linked windows open, environmental and geographic space; the first time takes a few
+   minutes. Click nodes or branches to show them, hover for labels. The program ends when
+   both windows are closed.
+
+To update, `git pull` and repeat step 5.
+
 ## Data lives in Google Drive, not in git
 
 The large inputs and the output figures are **not** tracked in this repo. They live in a
