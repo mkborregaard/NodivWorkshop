@@ -126,7 +126,7 @@ sosmap_g
 # Parent/SOS/children panel for one node (4th arg = cached SOS, no recompute); also
 # `explorer_e.panel.node[] = focal` shows it in the explorer
 # Node names are numbered by data/clean/tree.nwk: re-running preprocess.jl renumbers them
-focal = "Node 17672"
+focal = "Node 16367"
 panel_e, _ = node_panel(birds_e, tree, focal, res_e)
 panel_e
 # save("figures/Env node panel $focal.png", panel_e)
@@ -283,7 +283,7 @@ explorer_fig_e, explorer_e = node_explorer(
     birds_e, tree, res_e; nodes=divergent_e, explorer_options...
 )
 explorer_fig_g, explorer_g = node_explorer(
-    birds_g, tree, res_g; nodes=divergent_g, explorer_options...
+    birds_g, tree, res_g; node = "Node 16367", nodes=divergent_g, explorer_options...
 )
 
 # Link the two: a node picked in one space is shown in the other too, if it has an SOS there
