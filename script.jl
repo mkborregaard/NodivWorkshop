@@ -136,15 +136,27 @@ panel_g
 
 allnodes = collect(keys(metric_e))
 dat = DataFrame(;
+    node=allnodes,
     log_g=[log(metric_g[n]) for n in allnodes],  # NB logit or log, depends on metric
     log_e=[log(metric_e[n]) for n in allnodes],
 )
-dat = filter(row -> all(isfinite, row), dat)
+dat = filter(row -> isfinite(row.log_g) && isfinite(row.log_e), dat)
+dat.resid = dat.log_e .- dat.log_g  # Residual along the env axis from the 1:1 line
 
 metric_scatter = scatter(
-    dat.log_g, dat.log_e; axis=(; xlabel="log geo $METRIC", ylabel="log env $METRIC")
+    dat.log_g,
+    dat.log_e;
+    color=dat.resid,
+    colormap=:RdBu,
+    colorrange=(-1, 1) .* maximum(abs, dat.resid),
+    axis=(; xlabel="log geo $METRIC", ylabel="log env $METRIC"),
+    inspector_label=(_, i, _) -> "$(dat.node[i])\ngeo: $(round(dat.log_g[i]; digits=3))\nenv: $(round(dat.log_e[i]; digits=3))\nresid: $(round(dat.resid[i]; digits=3))",
 )
-ablines!(metric_scatter.axis, 0, 1; color=:red)  # The 1:1 line
+Colorbar(metric_scatter.figure[1, 2], metric_scatter.plot; label="env residual from 1:1")
+ablines!(metric_scatter.axis, 0, 1; color=:red, inspectable=false)  # The 1:1 line
+hlines!(metric_scatter.axis, log(2); linestyle=:dot, color=:black, inspectable=false)
+vlines!(metric_scatter.axis, log(2); linestyle=:dot, color=:black, inspectable=false)
+DataInspector(metric_scatter)  # hover shows the node name
 metric_scatter
 # save("figures/Env vs geo $METRIC.png", metric_scatter)
 
