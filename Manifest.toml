@@ -2,7 +2,7 @@
 
 julia_version = "1.13.0"
 manifest_format = "2.1"
-project_hash = "7585b133c6b579f976c73b5487c2e3e63d604b87"
+project_hash = "013d0982c841838bf18779a588aa378f89c22e9b"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -406,13 +406,6 @@ registries = "General"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.3"
 
-[[deps.CoordinateTransformations]]
-deps = ["LinearAlgebra", "StaticArrays"]
-git-tree-sha1 = "a692f5e257d332de1e554e4566a4e5a8a72de2b2"
-registries = "General"
-uuid = "150eb455-5306-5404-9cee-2592286d6298"
-version = "0.6.4"
-
 [[deps.CoreMath]]
 deps = ["CoreMath_jll"]
 git-tree-sha1 = "8c0480f92b1b1796239156a1b9b1bfb1b39499b4"
@@ -601,12 +594,6 @@ registries = "General"
 uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
 version = "2.8.4+0"
 
-[[deps.Extents]]
-git-tree-sha1 = "b309b36a9e02fe7be71270dd8c0fd873625332b4"
-registries = "General"
-uuid = "411431e0-e8b7-467b-b5e0-f676ba4f2910"
-version = "0.1.6"
-
 [[deps.FFMPEG_jll]]
 deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libva_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
 git-tree-sha1 = "e3c081ec777297fb8fc433012d15a6eaf806b4d2"
@@ -772,68 +759,22 @@ registries = "General"
 uuid = "a0844989-3bd2-4988-8bea-c9407ab0941b"
 version = "1.2.0"
 
-[[deps.GeoFormatTypes]]
-git-tree-sha1 = "7528a7956248c723d01a0a9b0447bf254bf4da52"
-registries = "General"
-uuid = "68eda718-8dee-11e9-39e7-89f7f65f511f"
-version = "0.4.5"
-
-[[deps.GeoInterface]]
-deps = ["DataAPI", "Extents", "GeoFormatTypes"]
-git-tree-sha1 = "20f6b13b28c6304104968374f38c24ef71a8ea16"
-registries = "General"
-uuid = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
-version = "1.6.2"
-weakdeps = ["GeometryBasics", "Makie", "RecipesBase"]
-
-    [deps.GeoInterface.extensions]
-    GeoInterfaceMakieExt = ["Makie", "GeometryBasics"]
-    GeoInterfaceRecipesBaseExt = "RecipesBase"
-
 [[deps.GeometryBasics]]
 deps = ["EarCut_jll", "LinearAlgebra", "PrecompileTools", "Random", "StaticArrays"]
 git-tree-sha1 = "ec46c5825710fa1a15d468acb2d93cc939a7a5fe"
 registries = "General"
 uuid = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
 version = "0.5.13"
-weakdeps = ["Extents", "GeoInterface", "IntervalSets"]
 
     [deps.GeometryBasics.extensions]
     ExtentsExt = "Extents"
     GeometryBasicsGeoInterfaceExt = "GeoInterface"
     IntervalSetsExt = "IntervalSets"
 
-[[deps.GeometryOps]]
-deps = ["AbstractTrees", "AdaptivePredicates", "CoordinateTransformations", "DataAPI", "DelaunayTriangulation", "ExactPredicates", "Extents", "GeoFormatTypes", "GeoInterface", "GeometryOpsCore", "LinearAlgebra", "PrecompileTools", "Random", "SortTileRecursiveTree", "StaticArrays", "Statistics", "Tables"]
-git-tree-sha1 = "b0d208d68332d90d632d9bb4303e0b55ca8fb13c"
-registries = "General"
-uuid = "3251bfac-6a57-4b6d-aa61-ac1fef2975ab"
-version = "0.1.47"
-
-    [deps.GeometryOps.extensions]
-    GeometryOpsDataFramesExt = "DataFrames"
-    GeometryOpsDimensionalDataExt = "DimensionalData"
-    GeometryOpsFlexiJoinsExt = "FlexiJoins"
-    GeometryOpsLibGEOSExt = "LibGEOS"
-    GeometryOpsMakieExt = "Makie"
-    GeometryOpsProjExt = "Proj"
-    GeometryOpsTGGeometryExt = "TGGeometry"
-
-    [deps.GeometryOps.weakdeps]
-    DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-    DimensionalData = "0703355e-b756-11e9-17c0-8b28908087d0"
-    FlexiJoins = "e37f2e79-19fa-4eb7-8510-b63b51fe0a37"
-    LibGEOS = "a90b1aa1-3769-5649-ba7e-abc5a9d163eb"
-    Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
-    Proj = "c94c279d-25a6-4763-9509-64d165bea63e"
-    TGGeometry = "d7e755d2-3c95-4bcf-9b3c-79ab1a78647b"
-
-[[deps.GeometryOpsCore]]
-deps = ["DataAPI", "GeoInterface", "StableTasks", "Tables"]
-git-tree-sha1 = "8f32a94cf3d80a716cae6025af6cbc4e68421da5"
-registries = "General"
-uuid = "05efe853-fabf-41c8-927e-7063c8b9f013"
-version = "0.1.12"
+    [deps.GeometryBasics.weakdeps]
+    Extents = "411431e0-e8b7-467b-b5e0-f676ba4f2910"
+    GeoInterface = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
+    IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
 
 [[deps.GettextRuntime_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll"]
@@ -1879,13 +1820,6 @@ version = "0.1.5"
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 version = "1.11.0"
 
-[[deps.SortTileRecursiveTree]]
-deps = ["AbstractTrees", "Extents", "GeoInterface"]
-git-tree-sha1 = "f9aa6616a9b3bd01f93f27c010f1d25fc5a094a9"
-registries = "General"
-uuid = "746ee33f-1797-42c2-866d-db2fce69d14d"
-version = "0.1.4"
-
 [[deps.SortingAlgorithms]]
 deps = ["DataStructures"]
 git-tree-sha1 = "13cd91cc9be159e3f4d95b857fa2aa383b53772a"
@@ -1921,12 +1855,6 @@ weakdeps = ["ChainRulesCore"]
 
     [deps.SpecialFunctions.extensions]
     SpecialFunctionsChainRulesCoreExt = "ChainRulesCore"
-
-[[deps.StableTasks]]
-git-tree-sha1 = "c4f6610f85cb965bee5bfafa64cbeeda55a4e0b2"
-registries = "General"
-uuid = "91464d47-22a1-43fe-8b7f-2d57ee82463f"
-version = "0.1.7"
 
 [[deps.StackViews]]
 deps = ["OffsetArrays"]

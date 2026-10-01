@@ -9,8 +9,11 @@ time and not necessarily in order; it is not meant to be run top to bottom.
 traits (a PCA of the AVONET morphometrics, a trait explorer and the child clades' overlap
 in trait space); it starts from the objects and the node analysis cached by
 `create_objects.jl` and `script.jl`.
-`explorer.jl` opens the interactive node explorers straight from a terminal.
+`explorer.jl` opens the interactive node explorers straight from a terminal, and
+`traitsexplorer.jl` the trait explorer.
 Helper functions that are finished live in `functions.jl`, which the script `include`s;
+the trait functions, shared by `traitsscript.jl` and `traitsexplorer.jl`, live in
+`traitfunctions.jl`;
 functions still being developed stay in the script. Once finished, general analysis code
 moves to Nodiv and general plotting code to NodivMakie; only what is specific to this
 data (e.g. the traits and the taxon names of nodes) stays here. All plotting is done with
@@ -62,6 +65,17 @@ by SOS-pattern similarity.
    minutes. Click nodes or branches to show them, hover for labels. The program ends when
    both windows are closed.
 
+7. Optionally, run the trait explorer:
+
+   ```bash
+   julia traitsexplorer.jl
+   ```
+
+   One window opens with the tree, the SOS maps, the two child clades of the node shown in
+   trait space (PCA axes 1-2, with contours around 95%, 50% and 25% of their trait
+   probability densities), and every node's geographic rms against the overlap of those
+   densities (cut at 95%). Click a node in the tree or in the scatter to show it.
+
 To update, `git pull` and repeat step 5.
 
 ## Data lives in Google Drive, not in git
@@ -88,7 +102,8 @@ regular grid in Behrmann coordinates (km).
 
 `create_objects.jl` reads the cleaned inputs, builds the tree and the two assemblages
 (`birds_e`, `birds_g`, with their site covariates and traits) and caches them in
-`data/objects.jld2`, which `script.jl`, `traitsscript.jl` and `explorer.jl` load. Re-run it
+`data/objects.jld2`, which `script.jl`, `traitsscript.jl`, `explorer.jl` and `traitsexplorer.jl`
+load. Re-run it
 whenever `preprocess.jl` has been re-run:
 
 ```bash
