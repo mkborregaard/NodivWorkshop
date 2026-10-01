@@ -134,3 +134,23 @@ overlap_env_trait = let fig = Figure(; size=(600, 550))
     fig
 end
 # save("figures/Env overlap vs trait overlap.png", overlap_env_trait)
+
+overlap_geo_env = let fig = Figure(; size=(700, 550))
+    nodes = [
+        n for n in geo_nodes if
+        isfinite(env_overlap[n]) && isfinite(trait_overlap[n]) && isfinite(log(metric_g[n]))
+    ]
+    ax = Axis(
+        fig[1, 1];
+        title="Geographic: $METRIC against env KDE overlap",
+        xlabel="Env KDE overlap",
+        ylabel="log $METRIC",
+    )
+    x = [env_overlap[n] for n in nodes]
+    y = [log(metric_g[n]) for n in nodes]
+    color = [trait_overlap[n] for n in nodes]
+    sc = scatter!(ax, x, y; color, markersize=5)
+    Colorbar(fig[1, 2], sc; label="Trait TPD overlap (pca$(TRAIT_PCS[1])-$(TRAIT_PCS[2]))")
+    fig
+end
+# save("figures/Geo $METRIC vs env overlap.png", overlap_geo_env)
