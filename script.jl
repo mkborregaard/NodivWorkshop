@@ -105,6 +105,7 @@ sosmap_e = map_figure(
     birds_e;
     colormap=:RdYlBu,
     colorrange=(-8, 8),
+    empty_color=:lightgray,
     title="Environmental: SOS of $focal_e",
     label="SOS",
 )
@@ -116,6 +117,7 @@ sosmap_g = map_figure(
     birds_g;
     colormap=:RdYlBu,
     colorrange=(-8, 8),
+    empty_color=:lightgray,
     title="Geographic: SOS of $focal_g",
     label="SOS",
     figure=(; size=(1000, 500)),

@@ -1342,7 +1342,7 @@ version = "0.2.2"
 
 [[deps.NodivMakie]]
 deps = ["ColorTypes", "EcoBase", "FileIO", "GridLayoutBase", "ImageIO", "Makie", "Nodiv", "Phylo", "SpatialEcology"]
-git-tree-sha1 = "dcc06ecb60cecac14c5480ca699f4c36b48d99ab"
+git-tree-sha1 = "bc7a916c3aeba2b79fa869bc2edc37ae8e9c651e"
 repo-rev = "main"
 repo-url = "https://github.com/mkborregaard/NodivMakie.jl"
 uuid = "6e5bb3f3-9e99-4721-b096-016fa2d2f487"
