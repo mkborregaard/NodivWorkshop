@@ -52,8 +52,8 @@ function child_points(tree, node, pts)
     ]
 end
 
-# A grid over the trait space of `pts` (species => point): `n` points along each axis,
-# spanning the range of the points extended by `extend` of it on each side
+# A grid over the space of `pts` (species => point, or a vector of points): `n` points along
+# each axis, spanning the range of the points extended by `extend` of it on each side
 function trait_grid(pts; n=200, extend=0.15)
     function axis(v)
         lo, hi = extrema(v)
@@ -102,6 +102,52 @@ function trait_overlaps(tree, pts, nodes; alpha=0.95)
     )
 end
 
+### ---- Clade densities in environmental space ---- ###
+
+# The sites of `asm` as points in its space (for the environmental assemblage, the midpoints
+# of its PC1-PC2 bins)
+function site_points(asm)
+    c = coordinates(asm)
+    return Point2d.(c[:, 1], c[:, 2])
+end
+
+# Species => the indices of the sites of `asm` it occurs in
+function species_sites(asm)
+    occ = permutedims(occurrences(asm))
+    return Dict(sp => findall(occ[:, j]) for (j, sp) in enumerate(speciesnames(asm)))
+end
+
+# For each of `node`'s two child clades, site index => the number of its species there (in
+# `spsites`, species => site indices)
+function child_site_counts(tree, node, spsites)
+    return map(getchildren(tree, node)[1:2]) do c
+        counts = Dict{Int,Int}()
+        for sp in nodespecies(tree, getnodename(tree, c)), i in get(spsites, sp, Int[])
+            counts[i] = get(counts, i, 0) + 1
+        end
+        return counts
+    end
+end
+
+# The points of each of `node`'s two child clades: the union of the sites (in `sites`) of
+# its species, each site counted once
+function child_site_points(tree, node, sites, spsites)
+    return [sites[sort!(collect(keys(c)))] for c in child_site_counts(tree, node, spsites)]
+end
+
+# Node => the overlap of the densities of its two child clades in the space of `asm`, each
+# fit to the union of the sites of its species as the TPDs of `tpd`
+function site_overlaps(tree, asm, nodes; alpha=0.95)
+    sites = site_points(asm)
+    spsites = species_sites(asm)
+    grid = trait_grid(sites)
+    return Dict(
+        n => tpd_overlap(
+            (tpd(c, grid; alpha) for c in child_site_points(tree, n, sites, spsites))...
+        ) for n in nodes
+    )
+end
+
 ### ---- The trait explorer ---- ###
 
 # `color` darkened by `f` (0 = black, 1 = unchanged)
@@ -110,21 +156,25 @@ function darken(color, f=0.6)
     return RGBAf(f * c.r, f * c.g, f * c.b, c.alpha)
 end
 
-# All species in trait space in grey, with the two child clades of `node` (an Observable) in
-# the explorer's clade colours, the smaller clade on top, each with contours in a darker
-# shade around the fractions `probs` of the probability of its TPD (the outermost where
-# `tpd` cuts it, by default)
-function trait_panel!(gp, asm, tree, node, x, y; probs=(0.95, 0.5, 0.25), axis=(;))
-    pts = trait_points(asm, x, y)
-    grid = trait_grid(pts)
+# All points `allpts` in grey, with the points of the two child clades in `clades` (an
+# Observable of the two point vectors) in the explorer's clade colours, the smaller clade on
+# top, each with contours in a darker shade around the fractions `probs` of the probability
+# of its density on `grid` (the outermost where `tpd` cuts it, by default). With
+# `showpoints=false` the clades' points are left to the caller.
+function clade_density_panel!(
+    gp, allpts, grid, clades; probs=(0.95, 0.5, 0.25), showpoints=true, axis=(;)
+)
     colors = clade_colors(:RdYlBu)
     ax = Axis(gp; xgridvisible=false, ygridvisible=false, axis...)
-    scatter!(ax, collect(values(pts)); color=:gray80, markersize=3, inspectable=false)
-    clades = lift(n -> child_points(tree, n, pts), node)
+    scatter!(ax, allpts; color=:gray80, markersize=3, inspectable=false)
     for (k, color) in enumerate(colors)
         cladepts = lift(c -> c[k], clades)
-        sc = scatter!(ax, cladepts; color, markersize=5, inspectable=false)
-        on(c -> translate!(sc, 0, 0, length(c[k]) <= length(c[3 - k])), clades; update=true)
+        if showpoints
+            sc = scatter!(ax, cladepts; color, markersize=5, inspectable=false)
+            on(clades; update=true) do c
+                translate!(sc, 0, 0, length(c[k]) <= length(c[3 - k]))
+            end
+        end
         # contours of the uncut TPD are smooth
         dens = lift(c -> something(tpd(c, grid; alpha=1), zeros(length.(grid))), cladepts)
         levels = lift(d -> iszero(d) ? [1.0] : sort([tpd_level(d, p) for p in probs]), dens)
@@ -132,6 +182,73 @@ function trait_panel!(gp, asm, tree, node, x, y; probs=(0.95, 0.5, 0.25), axis=(
             ax, grid..., dens; levels, color=darken(color), linewidth=1, inspectable=false
         )
         translate!(outline, 0, 0, 2)
+    end
+    return ax
+end
+
+# All species in trait space, with the two child clades of `node` (an Observable) and the
+# contours of their TPDs, as in `clade_density_panel!`
+function trait_panel!(gp, asm, tree, node, x, y; probs=(0.95, 0.5, 0.25), axis=(;))
+    pts = trait_points(asm, x, y)
+    clades = lift(n -> child_points(tree, n, pts), node)
+    return clade_density_panel!(
+        gp, collect(values(pts)), trait_grid(pts), clades; probs, axis
+    )
+end
+
+# The smallest spacing of the sites `pts` along x and along y (the size of the bins of the
+# environmental space)
+function bin_size(pts)
+    spacing(v) = minimum(diff(sort!(unique(v))))
+    return spacing(first.(pts)), spacing(last.(pts))
+end
+
+# All sites of `asm` in its space, with the sites of the two child clades of `node` (an
+# Observable) as hollow circles shifted left and right within their bin, the area of each
+# proportional to the number of the clade's species there (up to `maxsize` pixels across),
+# and the contours of the clades' densities as in `clade_density_panel!`; the title gives
+# the node's overlap in `overlap`
+function site_panel!(
+    gp, asm, tree, node, overlap; probs=(0.95, 0.5, 0.25), maxsize=12, axis=(;)
+)
+    sites = site_points(asm)
+    spsites = species_sites(asm)
+    dx, _ = bin_size(sites)
+    counts = lift(n -> child_site_counts(tree, n, spsites), node)
+    clades = lift(cs -> [sites[sort!(collect(keys(c)))] for c in cs], counts)
+    title = lift(n -> "KDE overlap: $(round(get(overlap, n, NaN); digits=3))", node)
+    ax = clade_density_panel!(
+        gp,
+        sites,
+        trait_grid(sites),
+        clades;
+        probs,
+        showpoints=false,
+        axis=(; title, axis...),
+    )
+    marks = lift(counts) do cs
+        cmax = maximum(c -> maximum(values(c); init=1), cs)
+        return map(enumerate(cs)) do (k, c)
+            s = sort!(collect(keys(c)))
+            shift = Point2d((2k - 3) * dx / 5, 0)
+            return (
+                sites[s] .+ Ref(shift),
+                [max(2, maxsize * sqrt(c[i] / cmax)) for i in s],
+                [c[i] for i in s],
+            )
+        end
+    end
+    for (k, color) in enumerate(clade_colors(:RdYlBu))
+        label(_, i, _) = "$(marks[][k][3][i]) species"
+        scatter!(
+            ax,
+            lift(m -> m[k][1], marks);
+            markersize=lift(m -> m[k][2], marks),
+            color=:transparent,
+            strokecolor=color,
+            strokewidth=1,
+            inspector_label=label,
+        )
     end
     return ax
 end
@@ -204,8 +321,10 @@ end
 # A node explorer of the two spaces and trait space: the tree, the SOS of the node shown in
 # geographic and environmental space, its two child clades on the PCA axes `pcs`, and every
 # node's log env `metric` against its log geo `metric`, coloured by the trait overlap of its
-# child clades in `overlap` (computed on the same axes), where clicking a node shows it.
-# Each space is passed as an (assemblage, NodeMetrics) pair. The
+# child clades in `overlap` (computed on the same axes), where clicking a node shows it. If
+# `env_overlap` (node => the overlap of the child clades in environmental space, from
+# `site_overlaps`) is given, the last panel instead shows the two child clades in
+# environmental space. Each space is passed as an (assemblage, NodeMetrics) pair. The
 # tree marks `marked`, a Dict of node name => value, or, if `marked` is a function of a
 # threshold returning one, the nodes for the threshold set with a slider of `thresholds`
 # under the tree, starting at `threshold`.
@@ -221,6 +340,7 @@ function trait_explorer(
     pcs=(1, 2),
     threshold=2,
     thresholds=0:0.1:3,
+    env_overlap=nothing,
     images=nothing,
     imageoptions=(;),
 )
@@ -259,21 +379,32 @@ function trait_explorer(
         (Symbol("pca$i") for i in pcs)...;
         axis=(; xlabel=pc_label(pcs[1]), ylabel=pc_label(pcs[2])),
     )
-    overlap_panel!(
-        panels[2, 2],
-        node,
-        overlap,
-        getfield(res_g, metric),
-        getfield(res_e, metric);
-        selectable,
-        unselectable,
-        status=tr.status,
-        axis=(;
-            xlabel="log geo $metric",
-            ylabel="log env $metric",
-            title="Coloured by TPD overlap (pca$(pcs[1])-$(pcs[2]))",
-        ),
-    )
+    if env_overlap !== nothing
+        site_panel!(
+            panels[2, 2],
+            birds_e,
+            tree,
+            node,
+            env_overlap;
+            axis=(; xlabel="env PC1", ylabel="env PC2"),
+        )
+    else
+        overlap_panel!(
+            panels[2, 2],
+            node,
+            overlap,
+            getfield(res_g, metric),
+            getfield(res_e, metric);
+            selectable,
+            unselectable,
+            status=tr.status,
+            axis=(;
+                xlabel="log geo $metric",
+                ylabel="log env $metric",
+                title="Coloured by TPD overlap (pca$(pcs[1])-$(pcs[2]))",
+            ),
+        )
+    end
     colsize!(fig.layout, 1, Relative(0.45))
     DataInspector(fig)
     return fig, tr

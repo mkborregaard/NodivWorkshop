@@ -44,6 +44,12 @@ pcs, trait_pca_fit, pca_explained = trait_pcs(birds_g)
 addtraits!(birds_e, pcs, :species)
 addtraits!(birds_g, pcs, :species)
 
+### ---- Clade overlap in environmental space (KDE) ---- ###
+
+geo_nodes = collect(keys(metric_g))
+env_overlap = site_overlaps(tree, birds_e, geo_nodes)
+env_overlap_values = [env_overlap[n] for n in geo_nodes]
+
 ### ---- Trait overlap (TPD) and the trait explorer ---- ###
 
 # The two PCA axes of trait space
@@ -67,6 +73,7 @@ trait_fig, trait_explorer_tree = trait_explorer(
     metric=METRIC,
     pcs=TRAIT_PCS,
     threshold=THRESHOLD,
+    env_overlap,
     images=isdir(IMAGEDIR) ? IMAGEDIR : nothing,
     imageoptions=(; whitebackground=true),
 )
@@ -102,3 +109,18 @@ overlap_scatter = let fig = Figure(; size=(1100, 500))
     fig
 end
 # save("figures/Trait overlap vs $METRIC.png", overlap_scatter)
+
+overlap_env_trait = let fig = Figure(; size=(600, 550))
+    nodes = [n for n in geo_nodes if isfinite(env_overlap[n]) && isfinite(trait_overlap[n])]
+    ax = Axis(
+        fig[1, 1];
+        title="Environmental: KDE overlap against trait overlap",
+        xlabel="Trait TPD overlap (pca$(TRAIT_PCS[1])-$(TRAIT_PCS[2]))",
+        ylabel="Env KDE overlap",
+    )
+    x = [trait_overlap[n] for n in nodes]
+    y = [env_overlap[n] for n in nodes]
+    scatter!(ax, x, y; markersize=5)
+    fig
+end
+# save("figures/Env overlap vs trait overlap.png", overlap_env_trait)
