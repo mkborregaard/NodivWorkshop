@@ -25,10 +25,25 @@ by SOS-pattern similarity.
 
 ## Quick start: running the explorer
 
-1. Install Julia with [juliaup](https://github.com/JuliaLang/juliaup), then open a new
-   terminal:
-   - macOS: `curl -fsSL https://install.julialang.org | sh`
+1. Install Julia with [juliaup](https://github.com/JuliaLang/juliaup):
+   - macOS: `curl -fsSL https://install.julialang.org | sh` (accept the defaults), or
+     `brew install juliaup` if you use Homebrew
    - Windows: `winget install julia -s msstore`
+
+   Then close the terminal, open a new one and check that `julia --version` works. If
+   macOS says `command not found: julia`:
+
+   - Check that juliaup installed Julia: `ls ~/.juliaup/bin` should list `julia`. If it
+     says `No such file or directory`, the installation did not finish; run the installer
+     again and read its output.
+   - If `julia` is there, it is only missing from your PATH. Add it for every shell, then
+     open a new terminal:
+
+     ```bash
+     echo 'export PATH="$HOME/.juliaup/bin:$PATH"' | tee -a ~/.zprofile ~/.zshrc ~/.bash_profile ~/.bashrc
+     ```
+
+   - Or skip the PATH: type `~/.juliaup/bin/julia` wherever the steps below say `julia`.
 2. Clone the repo and enter it:
 
    ```bash
