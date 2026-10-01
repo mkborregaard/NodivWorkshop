@@ -87,9 +87,10 @@ by SOS-pattern similarity.
    ```
 
    One window opens with the tree, the SOS maps, the two child clades of the node shown in
-   trait space (PCA axes 1-2, with contours around 95%, 50% and 25% of their trait
-   probability densities), and every node's geographic rms against the overlap of those
-   densities (cut at 95%). Click a node in the tree or in the scatter to show it.
+   trait space (PCA axes 2-3, with contours around 95%, 50% and 25% of their trait
+   probability densities), and every node's environmental rms against its geographic rms,
+   coloured by the overlap of those densities (cut at 95%). Click a node in the tree or in
+   the scatter to show it.
 
 To update, `git pull` and repeat step 5.
 

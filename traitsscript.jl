@@ -46,12 +46,16 @@ addtraits!(birds_g, pcs, :species)
 
 ### ---- Trait overlap (TPD) and the trait explorer ---- ###
 
-pts12 = trait_points(birds_g, :pca1, :pca2)
-trait_overlap = trait_overlaps(tree, pts12, allnodes)
+# The two PCA axes of trait space
+const TRAIT_PCS = (2, 3)
+trait_pts = trait_points(birds_g, (Symbol("pca$i") for i in TRAIT_PCS)...)
+trait_overlap = trait_overlaps(tree, trait_pts, allnodes)
 
 # The species images, as in script.jl's explorers, only if that folder is there
 const IMAGEDIR = "bow_images/workshop_species"
-trait_marked = Dict(n => metric_g[n] for n in divergent_e ∪ divergent_g)
+trait_divergent(t) = divergent_nodes(res_e; by=METRIC, threshold=t) ∪
+    divergent_nodes(res_g; by=METRIC, threshold=t)
+trait_marked(t) = Dict(n => metric_g[n] for n in trait_divergent(t))
 trait_fig, trait_explorer_tree = trait_explorer(
     tree,
     trait_marked,
@@ -61,6 +65,8 @@ trait_fig, trait_explorer_tree = trait_explorer(
     pca_explained,
     trait_overlap;
     metric=METRIC,
+    pcs=TRAIT_PCS,
+    threshold=THRESHOLD,
     images=isdir(IMAGEDIR) ? IMAGEDIR : nothing,
     imageoptions=(; whitebackground=true),
 )
@@ -88,7 +94,8 @@ overlap_scatter = let fig = Figure(; size=(1100, 500))
         (:log_e, overlap_fit_e, "Environmental: trait overlap and $METRIC"),
     )
     for (col, (y, lmfit, title)) in enumerate(panels)
-        ax = Axis(fig[1, col]; title, xlabel="TPD overlap (pca1-2)", ylabel="log $METRIC")
+        xlabel = "TPD overlap (pca$(TRAIT_PCS[1])-$(TRAIT_PCS[2]))"
+        ax = Axis(fig[1, col]; title, xlabel, ylabel="log $METRIC")
         scatter!(ax, overlap_dat.overlap, overlap_dat[!, y]; markersize=5)
         ablines!(ax, coef(lmfit)...; color=:red)
     end

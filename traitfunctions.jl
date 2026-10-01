@@ -136,21 +136,33 @@ function trait_panel!(gp, asm, tree, node, x, y; probs=(0.95, 0.5, 0.25), axis=(
     return ax
 end
 
-# Each node's log value in `values` against its trait overlap in `overlap`, with the
-# least-squares line; the node shown (an Observable) is ringed, and clicking a point shows
-# that node if it is `selectable`, else says why not in `status`
+# Each node's log value in the environmental `values_e` against that in the geographic
+# `values_g`, coloured by the trait overlap of its child clades in `overlap`, with the 1:1
+# line; the node shown (an Observable) is ringed, and clicking a point shows that node if it
+# is `selectable`, else says why not in `status`
 function overlap_panel!(
-    gp, node, overlap, values; selectable=n -> true, unselectable="", status=nothing, axis=(;)
+    gp,
+    node,
+    overlap,
+    values_g,
+    values_e;
+    selectable=n -> true,
+    unselectable="",
+    status=nothing,
+    axis=(;),
 )
     nodes = [
-        n for n in keys(overlap) if isfinite(overlap[n]) && get(values, n, NaN) > 0
+        n for n in keys(overlap) if
+        isfinite(overlap[n]) && get(values_g, n, NaN) > 0 && get(values_e, n, NaN) > 0
     ]
-    x = [overlap[n] for n in nodes]
-    y = [log(values[n]) for n in nodes]
-    ax = Axis(gp; axis...)
-    label(_, i, _) = "$(nodes[i])\noverlap = $(round(x[i]; digits=3))"
-    sc = scatter!(ax, x, y; color=:gray50, markersize=5, inspector_label=label)
-    ablines!(ax, ([ones(length(x)) x] \ y)...; color=:red, inspectable=false)
+    x = [log(values_g[n]) for n in nodes]
+    y = [log(values_e[n]) for n in nodes]
+    z = [overlap[n] for n in nodes]
+    ax = Axis(gp[1, 1]; axis...)
+    label(_, i, _) = "$(nodes[i])\ngeo: $(round(x[i]; digits=3))\nenv: $(round(y[i]; digits=3))\noverlap: $(round(z[i]; digits=3))"
+    sc = scatter!(ax, x, y; color=z, markersize=5, inspector_label=label)
+    Colorbar(gp[1, 2], sc; label="TPD overlap")
+    ablines!(ax, 0, 1; color=:red, inspectable=false)
     index = Dict(zip(nodes, eachindex(nodes)))
     ring = lift(n -> haskey(index, n) ? [Point2d(x[index[n]], y[index[n]])] : Point2d[], node)
     scatter!(
@@ -178,10 +190,25 @@ function overlap_panel!(
     return ax
 end
 
+# A slider under the tree of the explorer tree `tr` that marks the nodes `marked(t)` (node
+# name => value) for the threshold `t` it is set to
+function threshold_slider!(tr, marked; range=0:0.1:3, startvalue=2, label="threshold")
+    sg = SliderGrid(tr.layout[4, 1], (; label, range, startvalue); tellwidth=false)
+    on(sg.sliders[1].value) do t
+        m = marked(t)
+        Makie.update!(tr.treeplot; nodecolor=m, shownodes=collect(keys(m)))
+    end
+    return sg
+end
+
 # A node explorer of the two spaces and trait space: the tree, the SOS of the node shown in
-# geographic and environmental space, its two child clades on PCA axes 1-2, and every
-# node's log `nodevalues` against the trait overlap of its child clades in `overlap`, where
-# clicking a node shows it. Each space is passed as an (assemblage, NodeMetrics) pair.
+# geographic and environmental space, its two child clades on the PCA axes `pcs`, and every
+# node's log env `metric` against its log geo `metric`, coloured by the trait overlap of its
+# child clades in `overlap` (computed on the same axes), where clicking a node shows it.
+# Each space is passed as an (assemblage, NodeMetrics) pair. The
+# tree marks `marked`, a Dict of node name => value, or, if `marked` is a function of a
+# threshold returning one, the nodes for the threshold set with a slider of `thresholds`
+# under the tree, starting at `threshold`.
 function trait_explorer(
     tree,
     marked,
@@ -191,18 +218,22 @@ function trait_explorer(
     explained,
     overlap;
     metric,
+    pcs=(1, 2),
+    threshold=2,
+    thresholds=0:0.1:3,
     images=nothing,
     imageoptions=(;),
 )
     fig = Figure(; size=(1600, 850))
-    node = Observable(argmax(n -> marked[n], keys(marked)))
+    marked0 = marked isa AbstractDict ? marked : marked(threshold)
+    node = Observable(argmax(n -> marked0[n], keys(marked0)))
     selectable(n) = has_sos(tree, res_g.sos, n) && has_sos(tree, res_e.sos, n)
     unselectable = "no SOS in both spaces"
     tr = explorer_tree!(
         fig[1, 1],
         tree,
         node,
-        marked;
+        marked0;
         values=nodevalues,
         label="geo $metric",
         selectable,
@@ -211,6 +242,11 @@ function trait_explorer(
         imageoptions,
         rangesize=birds_g,
     )
+    if !(marked isa AbstractDict)
+        threshold_slider!(
+            tr, marked; range=thresholds, startvalue=threshold, label="$metric threshold"
+        )
+    end
     panels = fig[1, 2] = GridLayout()
     sos_map!(panels[1, 1], birds_g, node, res_g; title="Geographic SOS")
     sos_map!(panels[1, 2], birds_e, node, res_e; title="Environmental SOS")
@@ -220,19 +256,23 @@ function trait_explorer(
         birds_g,
         tree,
         node,
-        :pca1,
-        :pca2;
-        axis=(; xlabel=pc_label(1), ylabel=pc_label(2)),
+        (Symbol("pca$i") for i in pcs)...;
+        axis=(; xlabel=pc_label(pcs[1]), ylabel=pc_label(pcs[2])),
     )
     overlap_panel!(
         panels[2, 2],
         node,
         overlap,
-        nodevalues;
+        getfield(res_g, metric),
+        getfield(res_e, metric);
         selectable,
         unselectable,
         status=tr.status,
-        axis=(; xlabel="TPD overlap (pca1-2)", ylabel="log geo $metric"),
+        axis=(;
+            xlabel="log geo $metric",
+            ylabel="log env $metric",
+            title="Coloured by TPD overlap (pca$(pcs[1])-$(pcs[2]))",
+        ),
     )
     colsize!(fig.layout, 1, Relative(0.45))
     DataInspector(fig)
