@@ -57,14 +57,23 @@ const TRAIT_PCS = (2, 3)
 trait_pts = trait_points(birds_g, (Symbol("pca$i") for i in TRAIT_PCS)...)
 trait_overlap = trait_overlaps(tree, trait_pts, allnodes)
 
+const DIVERGENCE_THRESHOLD = 1.5
+const OVERLAP_THRESHOLD = 0.2
+trait_divergence = divergence_classes(
+    metric_g,
+    metric_e,
+    trait_overlap;
+    threshold=DIVERGENCE_THRESHOLD,
+    overlap_threshold=OVERLAP_THRESHOLD,
+)
+divergence_label =
+    "divergent in ($METRIC > $DIVERGENCE_THRESHOLD, trait overlap < $OVERLAP_THRESHOLD)"
+
 # The species images, as in script.jl's explorers, only if that folder is there
 const IMAGEDIR = "bow_images/workshop_species"
-trait_divergent(t) = divergent_nodes(res_e; by=METRIC, threshold=t) ∪
-    divergent_nodes(res_g; by=METRIC, threshold=t)
-trait_marked(t) = Dict(n => metric_g[n] for n in trait_divergent(t))
 trait_fig, trait_explorer_tree = trait_explorer(
     tree,
-    trait_marked,
+    filter(p -> last(p) > 1, trait_divergence),
     metric_g,
     (birds_g, res_g),
     (birds_e, res_e),
@@ -72,8 +81,9 @@ trait_fig, trait_explorer_tree = trait_explorer(
     trait_overlap;
     metric=METRIC,
     pcs=TRAIT_PCS,
-    threshold=THRESHOLD,
     env_overlap,
+    classes=DIVERGENCE_CLASSES,
+    classlabel=divergence_label,
     images=isdir(IMAGEDIR) ? IMAGEDIR : nothing,
     imageoptions=(; whitebackground=true),
 )

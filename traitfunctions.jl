@@ -148,6 +148,42 @@ function site_overlaps(tree, asm, nodes; alpha=0.95)
     )
 end
 
+### ---- Divergence classes ---- ###
+
+# The divergence classes, label => colour: which of geography, environment and traits the
+# two child clades of a node diverge in. Indexed by 1 + geo + 2env + 4trait.
+const DIVERGENCE_CLASSES = [
+    "none" => RGBf(0.85, 0.85, 0.85),
+    "geo" => RGBf(0 / 255, 114 / 255, 178 / 255),
+    "env" => RGBf(0 / 255, 158 / 255, 115 / 255),
+    "geo+env" => RGBf(86 / 255, 180 / 255, 233 / 255),
+    "trait" => RGBf(240 / 255, 228 / 255, 66 / 255),
+    "geo+trait" => RGBf(204 / 255, 121 / 255, 167 / 255),
+    "env+trait" => RGBf(230 / 255, 159 / 255, 0 / 255),
+    "all" => RGBf(0.1, 0.1, 0.1),
+]
+
+# Node => its divergence class (an index into DIVERGENCE_CLASSES): divergent in geography
+# and in environment where its value in `values_g` and in `values_e` is above
+# `threshold`, in traits where the trait overlap of its child clades in `overlap` is below
+# `overlap_threshold`. Nodes missing any of the three are left out.
+function divergence_classes(
+    values_g, values_e, overlap; threshold=1.5, overlap_threshold=0.2
+)
+    nodes = [
+        n for n in keys(overlap) if isfinite(overlap[n]) &&
+        isfinite(get(values_g, n, NaN)) &&
+        isfinite(get(values_e, n, NaN))
+    ]
+    return Dict(
+        n =>
+            1 +
+            (values_g[n] > threshold) +
+            2 * (values_e[n] > threshold) +
+            4 * (overlap[n] < overlap_threshold) for n in nodes
+    )
+end
+
 ### ---- The trait explorer ---- ###
 
 # `color` darkened by `f` (0 = black, 1 = unchanged)
@@ -327,7 +363,10 @@ end
 # environmental space. Each space is passed as an (assemblage, NodeMetrics) pair. The
 # tree marks `marked`, a Dict of node name => value, or, if `marked` is a function of a
 # threshold returning one, the nodes for the threshold set with a slider of `thresholds`
-# under the tree, starting at `threshold`.
+# under the tree, starting at `threshold`. With `classes`, a vector of label => colour
+# (e.g. DIVERGENCE_CLASSES), the values of `marked` are indices into it: the nodes are
+# coloured by class, with the labels of the classes among them on the colour bar under the
+# title `classlabel`.
 function trait_explorer(
     tree,
     marked,
@@ -341,19 +380,34 @@ function trait_explorer(
     threshold=2,
     thresholds=0:0.1:3,
     env_overlap=nothing,
+    classes=nothing,
+    classlabel="divergence class",
     images=nothing,
     imageoptions=(;),
 )
     fig = Figure(; size=(1600, 850))
     marked0 = marked isa AbstractDict ? marked : marked(threshold)
-    node = Observable(argmax(n -> marked0[n], keys(marked0)))
+    # the start node: the highest marked value, ties (classes) broken by `nodevalues`
+    node = Observable(argmax(n -> (marked0[n], get(nodevalues, n, -Inf)), keys(marked0)))
     selectable(n) = has_sos(tree, res_g.sos, n) && has_sos(tree, res_e.sos, n)
     unselectable = "no SOS in both spaces"
+    # with classes, the nodes are coloured by their position among the classes shown
+    if classes === nothing
+        shown, nodecolors, classcolors = nothing, marked0, (;)
+    else
+        shown = sort!(unique(values(marked0)))
+        position = Dict(c => i for (i, c) in enumerate(shown))
+        nodecolors = Dict(n => position[c] for (n, c) in marked0)
+        classcolors = (;
+            colormap=cgrad(last.(classes[shown]); categorical=true),
+            colorrange=(0.5, length(shown) + 0.5),
+        )
+    end
     tr = explorer_tree!(
         fig[1, 1],
         tree,
         node,
-        marked0;
+        nodecolors;
         values=nodevalues,
         label="geo $metric",
         selectable,
@@ -361,7 +415,19 @@ function trait_explorer(
         images,
         imageoptions,
         rangesize=birds_g,
+        classcolors...,
     )
+    if classes !== nothing
+        cb = only(contents(tr.layout[3, 1]))
+        cb.ticks = (eachindex(shown), first.(classes[shown]))
+        cb.label = classlabel
+        cb.width = Relative(0.9)
+        hover = tr.treeplot.hoverlabel[]
+        tr.treeplot.hoverlabel = function (n)
+            haskey(marked0, n) || return hover(n)
+            return hover(n) * "\n" * first(classes[marked0[n]])
+        end
+    end
     if !(marked isa AbstractDict)
         threshold_slider!(
             tr, marked; range=thresholds, startvalue=threshold, label="$metric threshold"

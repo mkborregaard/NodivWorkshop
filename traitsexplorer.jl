@@ -1,9 +1,10 @@
 # Open the trait explorer from the cached node analysis, in its own window: the tree, the
 # SOS of the node shown in geographic and environmental space, its two child clades in trait
 # space (PCA axes 2-3 of the AVONET morphometrics) and in environmental space, the latter
-# with the overlap of their kernel densities. A slider under the tree sets the rms threshold
-# of the marked nodes (default 2). The script ends when the window is closed. Needs the
-# same setup and caches as explorer.jl.
+# with the overlap of their kernel densities. The nodes of the tree are coloured by which of
+# geography and environment (rms > 1.5) and traits (TPD overlap < 0.2) their child clades
+# diverge in; nodes that diverge in none of them are not marked. The script ends when the
+# window is closed. Needs the same setup and caches as explorer.jl.
 #
 #     julia traitsexplorer.jl
 
@@ -35,12 +36,13 @@ pcs, _, pca_explained = trait_pcs(birds_g)
 addtraits!(birds_g, pcs, :species)
 overlap = trait_overlaps(tree, trait_points(birds_g, :pca2, :pca3), collect(keys(res_e.rms)))
 env_overlap = site_overlaps(tree, birds_e, collect(keys(res_g.rms)))
-divergent(t) = divergent_nodes(res_e; by=:rms, threshold=t) ∪
-    divergent_nodes(res_g; by=:rms, threshold=t)
+divergence = divergence_classes(
+    res_g.rms, res_e.rms, overlap; threshold=1.5, overlap_threshold=0.2
+)
 const IMAGEDIR = "bow_images/workshop_species"
 fig, explorer_tree = trait_explorer(
     tree,
-    t -> Dict(n => res_g.rms[n] for n in divergent(t)),
+    filter(p -> last(p) > 1, divergence),
     res_g.rms,
     (birds_g, res_g),
     (birds_e, res_e),
@@ -49,6 +51,8 @@ fig, explorer_tree = trait_explorer(
     metric=:rms,
     pcs=(2, 3),
     env_overlap,
+    classes=DIVERGENCE_CLASSES,
+    classlabel="divergent in (rms > 1.5, trait overlap < 0.2)",
     images=isdir(IMAGEDIR) ? IMAGEDIR : nothing,
     imageoptions=(; whitebackground=true),
 )
