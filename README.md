@@ -51,7 +51,7 @@ by SOS-pattern similarity.
    cd NodivWorkshop
    ```
 
-3. From the shared Drive folder `EnvSpace_Workshop/Nodiv project data/NodivWorkshop/data/`,
+3. From the shared Drive folder `Nodiv/NodivWorkshop/data/`,
    download `objects.jld2` and `node_analysis.jld2` into a new `data/` folder in the repo.
 4. Put the bird pictures (named like `Carduelis_hornemanni.jpg`) directly in
    `bow_images/workshop_species/`. They are optional and ignored by git.
@@ -100,7 +100,7 @@ The large inputs and the output figures are **not** tracked in this repo. They l
 shared Google Drive folder that contains two subfolders:
 
 ```
-<Google Drive>/…/EnvSpace_Workshop/Nodiv project data/NodivWorkshop/
+<Google Drive>/…/Nodiv/NodivWorkshop/
 ├── data/      # raw RDS, cleaned inputs, objects.jld2 (tree, birds_e / birds_g)
 │              # and the cached node_analysis.jld2 (res_e / res_g)
 └── figures/   # outputs
@@ -133,7 +133,7 @@ julia --project=. create_objects.jl
 2. From the repo, run:
 
    ```bash
-   julia setup.jl "/path/to/.../Nodiv project data/NodivWorkshop"
+   julia setup.jl "/path/to/.../Nodiv/NodivWorkshop"
    ```
 
    That path is the Drive folder holding `data/` and `figures/`. On macOS you can usually

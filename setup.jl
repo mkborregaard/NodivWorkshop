@@ -30,7 +30,7 @@ const REPO = @__DIR__
 function auto_discover()
     cs = joinpath(homedir(), "Library", "CloudStorage")
     isdir(cs) || return nothing
-    tail = joinpath("EnvSpace_Workshop", "Nodiv project data", "NodivWorkshop")
+    tail = joinpath("Nodiv", "NodivWorkshop")
     for gd in readdir(cs; join=true)
         startswith(basename(gd), "GoogleDrive-") || continue
         stb = joinpath(gd, ".shortcut-targets-by-id")  # Shared-drive shortcut targets
@@ -53,7 +53,7 @@ function resolve_data_root()
     d === nothing && error("""
         Could not locate the shared data folder automatically.
         Pass it explicitly (the folder that contains `data/` and `figures/`):
-            julia setup.jl "/path/to/.../Nodiv project data/NodivWorkshop"
+            julia setup.jl "/path/to/.../Nodiv/NodivWorkshop"
         or set the NODIVWORKSHOP_DATA environment variable to that folder.""")
     return d
 end
