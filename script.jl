@@ -142,11 +142,16 @@ save("figures/Geo SOS $focal_g.png", sosmap_g)
 
 # Parent/SOS/children panel for one node (4th arg = cached SOS, no recompute); also
 # `explorer_e.panel.node[] = focal` shows it in the explorer
-# A taxon name is stable across re-runs; the "Node N" names are numbered by
-# data/clean/tree.nwk, so re-running preprocess.jl renumbers them. Psittacidae is the most
-# divergent clade in both spaces (rms 2.76 environmental, 2.52 geographic), and its two
-# child clades are an even 186 and 189 species.
-focal = "Psittacidae"
+# The deepest split in the songbirds: the suboscines (Tyranni, 1400 species) against the
+# oscines (Passeri, 5146). It is the strongest divergence in both spaces - rms 6.03
+# environmental (rank 1 of the 1913 analysable nodes) and 4.84 geographic (rank 2) - and
+# the migration to the McTavish tree left it essentially untouched (it was 6.02 and 4.84
+# in the Jetz tree). Found by MRCA rather than written down: it was "Node 16367" before
+# the migration and is "Node 13091" now, because the "Node N" names are numbered by
+# data/clean/tree.nwk and every re-run of preprocess.jl renumbers them.
+focal = let t = traits(birds_g), fam = f -> first(t.name[t.Family1 .== f])
+    getnodename(tree, mrca(tree, [fam("Tyrannidae"), fam("Corvidae")]))
+end
 panel_e, _ = node_panel(birds_e, tree, focal, res_e)
 panel_e
 save("figures/Env node panel $focal.png", panel_e)
