@@ -6,9 +6,9 @@ node-based SOS/GND analysis of birds in environmental and geographic space.
 assemblages from them. `script.jl` is worked through interactively, a line or block at a
 time and not necessarily in order; it is not meant to be run top to bottom.
 `traitsscript.jl`, worked through the same way, is the separate analysis of the clades'
-traits (a PCA of the AVONET morphometrics, a trait explorer and the child clades' overlap
-in trait space); it starts from the objects and the node analysis cached by
-`create_objects.jl` and `script.jl`.
+traits (the PCA of the AVONET morphometrics that comes with the raw data, a trait
+explorer and the child clades' overlap in trait space); it starts from the objects and
+the node analysis cached by `create_objects.jl` and `script.jl`.
 `explorer.jl` opens the interactive node explorers straight from a terminal, and
 `traitsexplorer.jl` the trait explorer.
 Helper functions that are finished live in `functions.jl`, which the script `include`s;
@@ -110,14 +110,23 @@ In a working clone, `data/` and `figures/` are **symlinks** into that Drive fold
 (both are gitignored). The expensive `node_metrics(...; nsims=…)` run is cached to
 `data/node_analysis.jld2`. Don't recompute it: the script loads it from there.
 
-`preprocess.jl` reads the matched raw data, `data/data_birds_matched_simplified.rds`
-(phylogeny, presences and grids for both spaces, and AVONET traits), through RCall, so it
-needs R with the `sf` and `ape` packages. It writes the cleaned CSVs and the pruned tree.
-The geographic grid is a Behrmann equal-area grid, so its cells are placed on an exact
-regular grid in Behrmann coordinates (km).
+`preprocess.jl` reads the matched raw data, `data/Bird_data_PCA30.rds` (presences and
+grids for both spaces, three candidate phylogenies, AVONET traits with a morphometric
+PCA, and the environmental PCA's loadings), through RCall, so it needs R with the `sf`
+and `ape` packages. It writes the cleaned CSVs and the pruned tree. The geographic grid
+is a Behrmann equal-area grid, so its cells are placed on an exact regular grid in
+Behrmann coordinates (km).
+
+Of the three phylogenies it uses `McTavish_2025`, whose few polytomies it resolves
+stochastically under a fixed seed before making the tree ultrametric; `docs/data_migration.md`
+records why, and what changed when the analysis moved to this file from the earlier
+`data_birds_matched_simplified.rds`. That earlier file is still read, if present, for the
+raw CHELSA / MODIS / GLWD / elevation layers per geographic cell, which the new one
+keeps only as their PCA.
 
 `create_objects.jl` reads the cleaned inputs, builds the tree and the two assemblages
-(`birds_e`, `birds_g`, with their site covariates and traits) and caches them in
+(`birds_e`, `birds_g`, with their site covariates, traits and the morphometric PCA axes
+`pca1 … pca9`) and caches them, with the variance on those axes as `trait_pca`, in
 `data/objects.jld2`, which `script.jl`, `traitsscript.jl`, `explorer.jl` and `traitsexplorer.jl`
 load. Re-run it
 whenever `preprocess.jl` has been re-run:

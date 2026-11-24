@@ -67,10 +67,14 @@ end
     @testset "taxa_text" begin
         @test _taxa_list(string.('a':'c'), 8) == "a, b, c"
         @test _taxa_list(string.('a':'j'), 8) == "a, b, c, d\ne, f, g, h\n… and 2 more"
-        @test taxa_text(asm, tree, "root") == "2 families:\nFam1, Fam2"
-        @test taxa_text(asm, tree, "n2") == "Fam2\nBb, Cc"
-        @test taxa_text(asm, tree, "n2"; ngenera=1) == "Fam2\nBb\n… and 1 more"
-        @test taxa_text(asm, tree, "n3") == "Fam2\nCc"
+        # Several orders below the node are listed; a single one is named on its own
+        @test taxa_text(asm, tree, "root") ==
+            "2 orders:\nOrd1, Ord2\n2 families:\nFam1, Fam2"
+        @test taxa_text(asm, tree, "root"; norders=1) ==
+            "2 orders:\nOrd1\n… and 1 more\n2 families:\nFam1, Fam2"
+        @test taxa_text(asm, tree, "n2") == "Ord2\nFam2\nBb, Cc"
+        @test taxa_text(asm, tree, "n2"; ngenera=1) == "Ord2\nFam2\nBb\n… and 1 more"
+        @test taxa_text(asm, tree, "n3") == "Ord2\nFam2\nCc"
     end
 
     @testset "node_explorer hover labels" begin
@@ -82,7 +86,7 @@ end
 
         taxa_hover!(ex, asm, tree)
         taxa_image_hover!(ex, asm)
-        @test ex.treeplot.hoverlabel[]("n2") == before * "\nFam2\nBb, Cc"
+        @test ex.treeplot.hoverlabel[]("n2") == before * "\nOrd2\nFam2\nBb, Cc"
         @test endswith(ex.treeplot.hoverlabel[]("root"), "\n2 families:\nFam1, Fam2")
         @test ex.ordination.hoverlabel[]("root") == ex.treeplot.hoverlabel[]("root")
 
