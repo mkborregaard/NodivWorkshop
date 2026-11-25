@@ -231,8 +231,10 @@ save("figures/Geo $METRIC vs clade species.png", nspecies_scatter)
 # Complete-linkage clustering of each space's divergent nodes, cut at |r| >= SIMCUT: every
 # pair of nodes in a cluster has SOS maps correlated at |r| >= SIMCUT, every node is in
 # exactly one cluster, and a node with no such partner is on its own. Distances come from
-# `sos_distances` in Nodiv: 1 - |r| over the cells where both SOS maps are defined, with
-# the minimum-overlap floor `MINOVERLAP`. The two spaces' |r| are NOT compared
+# `sos_distances` in Nodiv: sqrt(1 - r^2) with r over the cells where both SOS maps are
+# defined, with the minimum-overlap floor `MINOVERLAP` (`sos_similarity` turns it back
+# into |r|). `method=:cosine` would compare the maps over the union of their cells instead,
+# counting cells without an SOS as 0; see the design doc. The two spaces' |r| are NOT compared
 # (environmental space has ~500 PC bins, geographic ~18k cells). See
 # docs/sos_pattern_grouping_design.md for why the number of clusters is not chosen from
 # the data.
