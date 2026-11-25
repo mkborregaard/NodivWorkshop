@@ -26,7 +26,9 @@ set_theme!(; colormap=Reverse(:Spectral))
 # data/objects.jld2 is written by create_objects.jl, data/node_analysis.jld2 by script.jl
 const OBJECTFILE = "data/objects.jld2"
 const CACHEFILE = "data/node_analysis.jld2"
-tree, birds_e, birds_g = load(OBJECTFILE, "tree", "birds_e", "birds_g")
+tree, birds_e, birds_g, trait_pca = load(
+    OBJECTFILE, "tree", "birds_e", "birds_g", "trait_pca"
+)
 res_e, res_g = load(CACHEFILE, "res_e", "res_g")
 
 # The same metric and divergent nodes as in script.jl
@@ -38,11 +40,12 @@ divergent_e = divergent_nodes(res_e; by=METRIC, threshold=THRESHOLD)
 divergent_g = divergent_nodes(res_g; by=METRIC, threshold=THRESHOLD)
 allnodes = collect(keys(metric_e))
 
-### ---- Traits: PCA of the AVONET morphometrics ---- ###
+### ---- Traits: the supplied PCA of the AVONET morphometrics ---- ###
 
-pcs, trait_pca_fit, pca_explained = trait_pcs(birds_g)
-addtraits!(birds_e, pcs, :species)
-addtraits!(birds_g, pcs, :species)
+# The axes (pca1 ... pca9) are already on both assemblages: create_objects.jl joins them
+# on from data/clean/trait_pca_scores.csv, which preprocess.jl takes from the raw data.
+# They are fit on nine non-redundant morphometrics; see docs/data_migration.md.
+pca_explained = trait_pca.proportion
 
 ### ---- Clade overlap in environmental space (KDE) ---- ###
 

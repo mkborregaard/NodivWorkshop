@@ -67,16 +67,43 @@ function taxa_text(asm, tree, node; norders=4, nfamilies=8, ngenera=6)
 end
 
 """
-    taxa_hover!(explorer, asm, tree)
+    split_taxa_text(asm, tree, node; colors=clade_colors(:RdYlBu), kwargs...)
 
-Add [`taxa_text`](@ref) to the hover labels of the tree of `explorer` (from
-`node_explorer` or `explorer_tree!`), and of its ordination if it has one. Returns
-`explorer`.
+The taxa below `node` for a hover label, as rich text: [`taxa_text`](@ref) of each of its
+two child clades, the first child's in `colors[1]` and the second's in `colors[2]`. The
+default colours are the explorers' clade colours (blue for the first child, red for the
+second), as on the tree's branches and in the SOS maps. A node with fewer than two children
+gets its own `taxa_text`. `kwargs` go to `taxa_text`.
 """
-function taxa_hover!(explorer, asm, tree)
+function split_taxa_text(asm, tree, node; colors=clade_colors(:RdYlBu), kwargs...)
+    children = getnodename.(Ref(tree), getchildren(tree, node))
+    length(children) < 2 && return rich(taxa_text(asm, tree, node; kwargs...))
+    # the first two children, as `focus_colors` colours the tree
+    parts = Any[]
+    for (child, color) in zip(children[1:2], colors)
+        text = taxa_text(asm, tree, child; kwargs...)
+        isempty(text) && continue
+        isempty(parts) || push!(parts, "\n")
+        push!(parts, rich(text; color))
+    end
+    return rich(parts...)
+end
+
+"""
+    taxa_hover!(explorer, asm, tree; colors=clade_colors(:RdYlBu))
+
+Add [`split_taxa_text`](@ref) to the hover labels of the tree of `explorer` (from
+`node_explorer` or `explorer_tree!`), and of its ordination if it has one: the taxa of the
+two child clades in `colors`. Returns `explorer`.
+"""
+function taxa_hover!(explorer, asm, tree; colors=clade_colors(:RdYlBu))
     base = explorer.treeplot.hoverlabel[]
-    cache = Dict{String,String}()
-    label(n) = get!(() -> string(base(n), "\n", taxa_text(asm, tree, n)), cache, n)
+    cache = Dict{String,Any}()
+    function label(n)
+        return get!(cache, n) do
+            return rich(string(base(n)), "\n", split_taxa_text(asm, tree, n; colors))
+        end
+    end
     explorer.treeplot.hoverlabel = label
     if hasproperty(explorer, :ordination) && explorer.ordination !== nothing
         explorer.ordination.hoverlabel = label

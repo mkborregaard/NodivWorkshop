@@ -1,40 +1,12 @@
 # The functions of the trait analysis, shared by traitsscript.jl and traitsexplorer.jl: the
-# PCA of the AVONET morphometrics, the trait probability densities (TPD) of clades and
-# their overlap, and the trait explorer. Needs DataFrames, GLMakie, MultivariateStats,
-# NodivMakie, Phylo, SpatialEcology, Statistics and StatsFuns loaded.
-
-### ---- Traits: PCA of the AVONET morphometrics ---- ###
-
-# Shapiro-Francia W': the squared correlation of the sorted values with the normal quantiles
-function normality(x)
-    n = length(x)
-    q = norminvcdf.(((1:n) .- 0.375) ./ (n + 0.25))
-    return cor(sort(x), q)^2
-end
-
-# PCA of the columns of `df`: a column is logged where that raises its W' by more than
-# `tol`, then all are z-transformed. Returns the PCA, the logged columns and the
-# z-transformed matrix (species x traits) it was fit on.
-function trait_pca(df; tol=0.01)
-    X = Matrix{Float64}(df)
-    logged = [all(>(0), x) && normality(log.(x)) - normality(x) > tol for x in eachcol(X)]
-    X[:, logged] .= log.(X[:, logged])
-    Z = (X .- mean(X; dims=1)) ./ std(X; dims=1)
-    return (; pca=fit(PCA, permutedims(Z); pratio=1), logged=names(df)[logged], z=Z)
-end
-
-# The PCA of the morphometrics of the species in `asm`: a DataFrame of their scores on the
-# first `naxes` axes (columns pca1, pca2, ... and species, for `addtraits!`), the fit from
-# `trait_pca`, and the proportion of the variance on each axis
-function trait_pcs(asm; naxes=4)
-    t = traits(asm)
-    pcafit = trait_pca(t[:, Between(:Beak_Length_Culmen, :Mass)])
-    explained = principalvars(pcafit.pca) ./ var(pcafit.pca)
-    scores = predict(pcafit.pca, permutedims(pcafit.z))[1:naxes, :]
-    pcs = DataFrame(permutedims(scores), ["pca$i" for i in 1:naxes])
-    pcs.species = t.name
-    return pcs, pcafit, explained
-end
+# trait probability densities (TPD) of clades and their overlap, and the trait explorer.
+# Needs DataFrames, GLMakie, MultivariateStats, NodivMakie, Phylo, SpatialEcology,
+# Statistics and StatsFuns loaded.
+#
+# The PCA of the AVONET morphometrics used to be fit here. It now comes with the raw data:
+# preprocess.jl writes it to data/clean/, create_objects.jl joins the axes (pca1 ... pca9)
+# onto the assemblages, and the scripts take the variance per axis from the `trait_pca`
+# table in data/objects.jld2. See docs/data_migration.md.
 
 ### ---- Trait probability densities and their overlap ---- ###
 

@@ -3,7 +3,9 @@
 # and explorer.jl load:
 #   - tree               the phylogeny, ladderized
 #   - birds_e, birds_g   the assemblages of each space (e = env, g = geo), with their site
-#                        covariates and the AVONET traits
+#                        covariates, the AVONET traits and the morphometric PCA axes
+#                        (pca1 ... pca9)
+#   - trait_pca          the variance on each of those axes
 # Run this once, and again whenever preprocess.jl has been re-run.
 #
 #     julia --project=. create_objects.jl
@@ -48,8 +50,23 @@ function assemblage(suffix, siteid, avonet)
 end
 
 tree = sort!(parsenewick(read(joinpath(INDIR, "tree.nwk"), String)))
+
+# The raw AVONET traits with the supplied morphometric PCA joined on, so the assemblages
+# carry both. The trait scripts read the axes from here instead of fitting a PCA of their
+# own; `trait_pca` carries the variance on each axis.
 avonet = read_clean("traits.csv")
+trait_pca = read_clean("trait_pca_variance.csv")
+let scores = read_clean("trait_pca_scores.csv")
+    idx = indexin(avonet.species, scores.species)
+    any(isnothing, idx) &&
+        error("a species in traits.csv is missing from trait_pca_scores.csv")
+    rows = Int.(idx)
+    for ax in trait_pca.axis
+        avonet[!, ax] = scores[rows, ax]
+    end
+end
+
 birds_e = assemblage("e", :ID_env, avonet)  # PC bins, area, occupancy, ...
 birds_g = assemblage("g", :ID_geo, avonet)  # CHELSA bioclim, PC1-3, area, ...
 
-jldsave(OBJECTFILE; tree, birds_e, birds_g)
+jldsave(OBJECTFILE; tree, birds_e, birds_g, trait_pca)

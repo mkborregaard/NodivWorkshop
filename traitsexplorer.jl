@@ -28,12 +28,14 @@ include("traitfunctions.jl")
 
 set_theme!(; colormap=Reverse(:Spectral))
 
-tree, birds_e, birds_g = load("data/objects.jld2", "tree", "birds_e", "birds_g")
+tree, birds_e, birds_g, trait_pca = load(
+    "data/objects.jld2", "tree", "birds_e", "birds_g", "trait_pca"
+)
 res_e, res_g = load("data/node_analysis.jld2", "res_e", "res_g")
 
-# The same settings as the trait explorer in traitsscript.jl
-pcs, _, pca_explained = trait_pcs(birds_g)
-addtraits!(birds_g, pcs, :species)
+# The same settings as the trait explorer in traitsscript.jl. The PCA axes are already on
+# the assemblages, joined on in create_objects.jl.
+pca_explained = trait_pca.proportion
 overlap = trait_overlaps(tree, trait_points(birds_g, :pca2, :pca3), collect(keys(res_e.rms)))
 env_overlap = site_overlaps(tree, birds_e, collect(keys(res_g.rms)))
 divergence = divergence_classes(

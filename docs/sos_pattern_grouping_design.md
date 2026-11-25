@@ -4,7 +4,7 @@
 
 ## The decision
 
-- **Distance:** `D = 1 − |r|` from `sos_distances` in Nodiv (unweighted, Pearson, `minoverlap = 3`).
+- **Distance:** `D = √(1 − r²)` from `sos_distances` in Nodiv (unweighted, Pearson, `minoverlap = 3`). Until 2026-11-25 it was `D = 1 − |r|`; the clusters are the same with either (see "The form of the distance" below).
 - **Grouping:** complete-linkage hierarchical clustering (`sos_clusters`), cut at an absolute similarity **|r| ≥ 0.6** (`SIMCUT` in `script.jl`). Every divergent node is in exactly one cluster; a cluster of one node is allowed. The cut is a choice the user owns and states in the methods. The data do not choose it.
 - **Output:** the printed cluster membership, and the clusters on the phylogeny (`cluster_tree`). The dendrogram-ordered |r| heatmap (`sos_cluster_heatmap`) is optional.
 - **Explorer:** the ordination panel of the node explorers (2-D classical MDS of the same `D`) stays, coloured by the clusters (`color_by_clusters!`). It is a projection for browsing, so distances in it are approximate. The clusters come from the full `D`, not from the 2-D picture.
@@ -14,7 +14,7 @@ What complete linkage at a cut means is easy to state: *every pair of nodes in a
 
 ## Principles (unchanged)
 
-**1. Sign of SOS is arbitrary per node, so use 1 − |r|, not 1 − r.** Which daughter is "clade 1" is incidental to the node. A mirror-image SOS map is the *same* divergence geography with the labels swapped.
+**1. Sign of SOS is arbitrary per node, so the distance depends on |r|, not r.** Which daughter is "clade 1" is incidental to the node. A mirror-image SOS map is the *same* divergence geography with the labels swapped.
 
 **2. Non-overlap is real difference, not missing information.** Two clades in disjoint regions are maximally different in where their over- and under-representation falls, so a disjoint pair gets distance 1. The same holds for pairs sharing fewer than `minoverlap` cells with both SOS defined.
 
@@ -24,7 +24,17 @@ What complete linkage at a cut means is easy to state: *every pair of nodes in a
 
 ## Distance, as implemented
 
-`sos_distances(res, nodes; minoverlap=3)` correlates two SOS maps over the cells where both are finite: where both nodes' daughter clades are present and the null model varies. Occupied cells where the null model cannot vary have no SOS and do not count. A pair sharing fewer than `minoverlap` such cells gets distance 1, and a constant map gets distance 1. The options exist but are not used: `method = :spearman`, and `overlapweight = true` (`D = 1 − O·|r|`, with `O` the Sørensen index of the occupied cells).
+`sos_distances(res, nodes; minoverlap=3)` correlates two SOS maps over the cells where both are finite: where both nodes' daughter clades are present and the null model varies. Occupied cells where the null model cannot vary have no SOS and do not count. A pair sharing fewer than `minoverlap` such cells gets distance 1, and a constant map gets distance 1. The options exist but are not used: `method = :spearman`, `overlapweight = true` (`D = √(1 − (O·|r|)²)`, with `O` the Sørensen index of the occupied cells), and `method = :cosine` (below).
+
+### The form of the distance (2026-11-25)
+
+The 2-D MDS of the explorers spread nodes of one cluster far apart. With complete linkage at |r| ≥ 0.6 every pair in a cluster had `D ≤ 0.4`, yet in the environmental ordination 129 of the 241 within-cluster pairs were drawn farther apart than their `D`, up to 0.65. Classical MDS of a Euclidean distance can only shorten distances, so `1 − |r|` was not Euclidean: it breaks the triangle inequality (two maps can each correlate at 0.7 with a third and not at all with each other). In the environmental space the negative eigenvalues summed to 51% of the positive ones, in the geographic 48%.
+
+`√(1 − r²)`, the sine of the angle between two maps, is a proper distance and ignores the sign like `|r|`. It orders the pairs exactly as `1 − |r|` does, so complete-linkage clusters cut at the same |r| are identical (checked: ARI 1 in both spaces). Only the ordination changes. With it, the within-cluster pairs drawn too far apart fell to 0 of 241 (environmental) and 3 of 61 (geographic), and the negative eigenvalue mass to 6% and 18%.
+
+What remains, mostly in the geographic space, comes from each pair being correlated over a different set of cells. Geographic pairs share a median of 26% of the union of their SOS cells, and 83 of the 250 pairs with |r| ≥ 0.6 share less than a quarter.
+
+**`method = :cosine`, an option not adopted.** Cells without an SOS count as 0 (no divergence), and the similarity is the uncentred |cos| over all cells, which in effect compares a pair over the union of its cells. Two clades that agree where they overlap, but each with much of its divergence outside the overlap, are then not similar. The distances are then exactly Euclidean. It changes the answer substantially: only 63 of the 250 geographic pairs with |r| ≥ 0.6 keep |cos| ≥ 0.6, against 765 of 1419 environmental pairs, and the clusters at 0.6 agree with the current ones at ARI 0.46 (geographic) and 0.41 (environmental). "No SOS" includes occupied cells where the null model cannot vary, which zero-filling also treats as no divergence. Adopting it changes the question from "do the two agree where both occur?" to "do they have the same pattern across both ranges?", which is a decision for the methods, not a fix.
 
 **The spaces differ in size, and |r| is not comparable between them.** The environmental space has 489 climate bins, and the geographic space 17,542 cells. (Earlier versions of this document and of `script.jl` said "tens of PC bins"; that was wrong.)
 - **Environmental:** pairs of divergent nodes share a median of 310 bins with SOS defined (5th percentile 71). Co-clustered pairs share a median of about 350. At 300 bins, r = 0.7 has a 95% CI of about 0.64–0.75, so the |r| values are not sampling noise.

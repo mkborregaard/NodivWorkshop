@@ -70,11 +70,26 @@ richness_g = map_figure(
     figure=(; size=(1000, 500)),
 )
 richness_g
-# save("figures/Geo species richness.png", richness_g)
+save("figures/Geo species richness.png", richness_g)
 
 # Strongly divergent nodes in each space (`METRIC` above `THRESHOLD`)
 divergent_e = divergent_nodes(res_e; by=METRIC, threshold=THRESHOLD)
 divergent_g = divergent_nodes(res_g; by=METRIC, threshold=THRESHOLD)
+
+# preprocess.jl resolves the tree's few polytomies by a random draw, so the clades of the
+# nodes it invented are an artifact of that draw, not something the source tree asserts: a
+# high metric on one of them is not evidence about the real phylogeny. As things stand
+# only one of the 63 is analysable at all and it is well below `THRESHOLD`, so this warns
+# on nothing - it is here to catch a re-run whose draw puts one of them among the
+# divergent nodes. See data/clean/invented_nodes.csv and docs/data_migration.md.
+invented = Set(
+    String(first(split(l, ','))) for
+    l in Iterators.drop(eachline("data/clean/invented_nodes.csv"), 1)
+)
+let suspect_e = intersect(divergent_e, invented), suspect_g = intersect(divergent_g, invented)
+    isempty(suspect_e) && isempty(suspect_g) ||
+        @warn "divergent nodes that polytomy resolution invented" env = suspect_e geo = suspect_g
+end
 
 # The metric of just the divergent nodes mapped onto the tree (markers only at `nodes`:
 # a node missing from the Dict would get a transparent fill but still its outline).
@@ -87,7 +102,7 @@ metric_tree_e = metric_tree(
     title="Environmental: divergent nodes, $METRIC",
 )
 metric_tree_e
-# save("figures/Env divergent nodes treeplot.png", metric_tree_e)
+save("figures/Env divergent nodes treeplot.png", metric_tree_e)
 metric_tree_g = metric_tree(
     tree,
     res_g;
@@ -96,7 +111,7 @@ metric_tree_g = metric_tree(
     title="Geographic: divergent nodes, $METRIC",
 )
 metric_tree_g
-# save("figures/Geo divergent nodes treeplot.png", metric_tree_g)
+save("figures/Geo divergent nodes treeplot.png", metric_tree_g)
 
 # SOS of the most divergent node mapped onto each space (cached SOS, no recompute)
 focal_e = argmax(n -> metric_e[n], divergent_e)
@@ -110,7 +125,7 @@ sosmap_e = map_figure(
     label="SOS",
 )
 sosmap_e
-# save("figures/Env SOS $focal_e.png", sosmap_e)
+save("figures/Env SOS $focal_e.png", sosmap_e)
 focal_g = argmax(n -> metric_g[n], divergent_g)
 sosmap_g = map_figure(
     res_g.sos[focal_g],
@@ -123,18 +138,26 @@ sosmap_g = map_figure(
     figure=(; size=(1000, 500)),
 )
 sosmap_g
-# save("figures/Geo SOS $focal_g.png", sosmap_g)
+save("figures/Geo SOS $focal_g.png", sosmap_g)
 
 # Parent/SOS/children panel for one node (4th arg = cached SOS, no recompute); also
 # `explorer_e.panel.node[] = focal` shows it in the explorer
-# Node names are numbered by data/clean/tree.nwk: re-running preprocess.jl renumbers them
-focal = "Node 16367"
+# The deepest split in the songbirds: the suboscines (Tyranni, 1400 species) against the
+# oscines (Passeri, 5146). It is the strongest divergence in both spaces - rms 6.03
+# environmental (rank 1 of the 1913 analysable nodes) and 4.84 geographic (rank 2) - and
+# the migration to the McTavish tree left it essentially untouched (it was 6.02 and 4.84
+# in the Jetz tree). Found by MRCA rather than written down: it was "Node 16367" before
+# the migration and is "Node 13091" now, because the "Node N" names are numbered by
+# data/clean/tree.nwk and every re-run of preprocess.jl renumbers them.
+focal = let t = traits(birds_g), fam = f -> first(t.name[t.Family1 .== f])
+    getnodename(tree, mrca(tree, [fam("Tyrannidae"), fam("Corvidae")]))
+end
 panel_e, _ = node_panel(birds_e, tree, focal, res_e)
 panel_e
-# save("figures/Env node panel $focal.png", panel_e)
+save("figures/Env node panel $focal.png", panel_e)
 panel_g, _ = node_panel(birds_g, tree, focal, res_g)
 panel_g
-# save("figures/Geo node panel $focal.png", panel_g)
+save("figures/Geo node panel $focal.png", panel_g)
 
 allnodes = collect(keys(metric_e))
 dat = DataFrame(;
@@ -160,7 +183,7 @@ hlines!(metric_scatter.axis, log(2); linestyle=:dot, color=:black, inspectable=f
 vlines!(metric_scatter.axis, log(2); linestyle=:dot, color=:black, inspectable=false)
 DataInspector(metric_scatter)  # hover shows the node name
 metric_scatter
-# save("figures/Env vs geo $METRIC.png", metric_scatter)
+save("figures/Env vs geo $METRIC.png", metric_scatter)
 
 rms_fit = lm(@formula(log_e ~ log_g), dat)
 
@@ -170,7 +193,7 @@ occupied_hist = hist(
     collect(values(occupied_e)); axis=(; xlabel="occupied env sites", ylabel="nodes")
 )
 occupied_hist
-# save("figures/Env occupied sites histogram.png", occupied_hist)
+save("figures/Env occupied sites histogram.png", occupied_hist)
 
 occupied_tree = let
     fig, ax, p = treeplot(
@@ -185,7 +208,7 @@ occupied_tree = let
     fig
 end
 occupied_tree
-# save("figures/Env occupied sites treeplot.png", occupied_tree)
+save("figures/Env occupied sites treeplot.png", occupied_tree)
 
 occupied_scatter = scatter(
     [occupied_e[n] for n in allnodes],
@@ -193,7 +216,7 @@ occupied_scatter = scatter(
     axis=(; xlabel="occupied env sites", ylabel="env $METRIC"),
 )
 occupied_scatter
-# save("figures/Env $METRIC vs occupied sites.png", occupied_scatter)
+save("figures/Env $METRIC vs occupied sites.png", occupied_scatter)
 
 nspecies_g = Dict(node => length(nodespecies(tree, node)) for node in allnodes)
 nspecies_scatter = scatter(
@@ -202,14 +225,16 @@ nspecies_scatter = scatter(
     axis=(; xlabel="log number of species in clade", ylabel="geo $METRIC"),
 )
 nspecies_scatter
-# save("figures/Geo $METRIC vs clade species.png", nspecies_scatter)
+save("figures/Geo $METRIC vs clade species.png", nspecies_scatter)
 
 ### ---- Grouping divergent nodes by SOS-pattern similarity ---- ###
 # Complete-linkage clustering of each space's divergent nodes, cut at |r| >= SIMCUT: every
 # pair of nodes in a cluster has SOS maps correlated at |r| >= SIMCUT, every node is in
 # exactly one cluster, and a node with no such partner is on its own. Distances come from
-# `sos_distances` in Nodiv: 1 - |r| over the cells where both SOS maps are defined, with
-# the minimum-overlap floor `MINOVERLAP`. The two spaces' |r| are NOT compared
+# `sos_distances` in Nodiv: sqrt(1 - r^2) with r over the cells where both SOS maps are
+# defined, with the minimum-overlap floor `MINOVERLAP` (`sos_similarity` turns it back
+# into |r|). `method=:cosine` would compare the maps over the union of their cells instead,
+# counting cells without an SOS as 0; see the design doc. The two spaces' |r| are NOT compared
 # (environmental space has ~500 PC bins, geographic ~18k cells). See
 # docs/sos_pattern_grouping_design.md for why the number of clusters is not chosen from
 # the data.
@@ -236,33 +261,33 @@ mds_g = sos_mds_scatter(
     D_g, divergent_g, clusters_g, "Geographic: SOS-pattern similarity"
 )
 mds_g
-# save("figures/Geo SOS-pattern similarity.png", mds_g)
+save("figures/Geo SOS-pattern similarity.png", mds_g)
 mds_e = sos_mds_scatter(
     D_e, divergent_e, clusters_e, "Environmental: SOS-pattern similarity"
 )
 mds_e
-# save("figures/Env SOS-pattern similarity.png", mds_e)
+save("figures/Env SOS-pattern similarity.png", mds_e)
 
 # Clusters mapped back onto the phylogeny
 tree_clusters_g = cluster_tree(
     tree, clusters_g; title="Geographic: SOS clusters on the phylogeny"
 )
 tree_clusters_g
-# save("figures/Geo SOS clusters on the phylogeny.png", tree_clusters_g)
+save("figures/Geo SOS clusters on the phylogeny.png", tree_clusters_g)
 tree_clusters_e = cluster_tree(
     tree, clusters_e; title="Environmental: SOS clusters on the phylogeny"
 )
 tree_clusters_e
-# save("figures/Env SOS clusters on the phylogeny.png", tree_clusters_e)
+save("figures/Env SOS clusters on the phylogeny.png", tree_clusters_e)
 
 # The |r| of every pair in dendrogram order, clusters outlined with the numbers and colours
 # of the tree above
 heat_g = sos_cluster_heatmap(clusters_g; title="Geographic: SOS clusters")
 heat_g
-# save("figures/Geo SOS clusters.png", heat_g)
+save("figures/Geo SOS clusters.png", heat_g)
 heat_e = sos_cluster_heatmap(clusters_e; title="Environmental: SOS clusters")
 heat_e
-# save("figures/Env SOS clusters.png", heat_e)
+save("figures/Env SOS clusters.png", heat_e)
 
 ### ---- The node explorers ---- ###
 
@@ -285,7 +310,7 @@ explorer_fig_e, explorer_e = node_explorer(
     birds_e, tree, res_e; nodes=divergent_e, explorer_options...
 )
 explorer_fig_g, explorer_g = node_explorer(
-    birds_g, tree, res_g; node = "Node 16367", nodes=divergent_g, explorer_options...
+    birds_g, tree, res_g; node=focal, nodes=divergent_g, explorer_options...
 )
 
 # Link the two: a node picked in one space is shown in the other too, if it has an SOS there
@@ -328,9 +353,9 @@ function labelled_tree(nodes, title)
     ).figure
 end
 divergent_tree_g = labelled_tree(divergent_g, "Geographic: divergent nodes")
-# save("figures/Geo divergent nodes labelled.png", divergent_tree_g)
+save("figures/Geo divergent nodes labelled.png", divergent_tree_g)
 divergent_tree_e = labelled_tree(divergent_e, "Environmental: divergent nodes")
-# save("figures/Env divergent nodes labelled.png", divergent_tree_e)
+save("figures/Env divergent nodes labelled.png", divergent_tree_e)
 # node_panel_pdf(
 #     birds_g, tree, divergent_g, res_g, "figures/divergent_node_panels_geo.pdf";
 #     backend=CairoMakie,
