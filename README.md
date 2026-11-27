@@ -1,239 +1,189 @@
 # NodivWorkshop
 
-An analysis in progress with [Nodiv.jl](https://github.com/mkborregaard/Nodiv.jl): the
-node-based SOS/GND analysis of birds in environmental and geographic space.
-`preprocess.jl` prepares the inputs and `create_objects.jl` builds the tree and the
-assemblages from them. `script.jl` is worked through interactively, a line or block at a
-time and not necessarily in order; it is not meant to be run top to bottom.
-`traitsscript.jl`, worked through the same way, is the separate analysis of the clades'
-traits (the PCA of the AVONET morphometrics that comes with the raw data, a trait
-explorer and the child clades' overlap in trait space); it starts from the objects and
-the node analysis cached by `create_objects.jl` and `script.jl`.
-`explorer.jl` opens the interactive node explorers straight from a terminal, and
-`traitsexplorer.jl` the trait explorer.
-Helper functions that are finished live in `functions.jl`, which the script `include`s;
-the trait functions, shared by `traitsscript.jl` and `traitsexplorer.jl`, live in
-`traitfunctions.jl`;
-functions still being developed stay in the script. Once finished, general analysis code
-moves to Nodiv and general plotting code to NodivMakie; only what is specific to this
-data (e.g. the traits and the taxon names of nodes) stays here. All plotting is done with
-[Makie](https://docs.makie.org), through
-[NodivMakie.jl](https://github.com/mkborregaard/NodivMakie.jl) for the trees, maps, node
-panels and cluster figures, with GLMakie for interactive windows.
-`docs/sos_pattern_grouping_design.md` is the design spec for grouping the divergent nodes
-by SOS-pattern similarity.
+The node-based SOS/GND analysis of birds in environmental and geographic space, with
+[Nodiv.jl](https://github.com/mkborregaard/Nodiv.jl) and
+[NodivMakie.jl](https://github.com/mkborregaard/NodivMakie.jl).
 
-## Quick start: running the explorer
+## Setup
 
-1. Install Julia with [juliaup](https://github.com/JuliaLang/juliaup):
-   - macOS: `curl -fsSL https://install.julialang.org | sh` (accept the defaults), or
-     `brew install juliaup` if you use Homebrew
+You need access to the shared Google Drive folder `Nodiv`. It holds the data, the figures
+and the species images, none of which are in this repo.
+
+1. **Google Drive.** Install [Google Drive for desktop](https://www.google.com/drive/download/)
+   and sign in. At [drive.google.com](https://drive.google.com), open *Shared with me*,
+   right-click `Nodiv` and choose *Organize → Add shortcut → My Drive*. That makes the
+   folder appear on your disk.
+2. **Julia.** Install it with [juliaup](https://github.com/JuliaLang/juliaup):
+   - macOS: `curl -fsSL https://install.julialang.org | sh` (accept the defaults)
    - Windows: `winget install julia -s msstore`
 
-   Then close the terminal, open a new one and check that `julia --version` works. If
-   macOS says `command not found: julia`:
+   Open a new terminal and check that `julia --version` works. If macOS says
+   `command not found: julia`, add juliaup to your PATH and open a new terminal again:
 
-   - Check that juliaup installed Julia: `ls ~/.juliaup/bin` should list `julia`. If it
-     says `No such file or directory`, the installation did not finish; run the installer
-     again and read its output.
-   - If `julia` is there, it is only missing from your PATH. Add it for every shell, then
-     open a new terminal:
+   ```bash
+   echo 'export PATH="$HOME/.juliaup/bin:$PATH"' | tee -a ~/.zprofile ~/.zshrc
+   ```
 
-     ```bash
-     echo 'export PATH="$HOME/.juliaup/bin:$PATH"' | tee -a ~/.zprofile ~/.zshrc ~/.bash_profile ~/.bashrc
-     ```
-
-   - Or skip the PATH: type `~/.juliaup/bin/julia` wherever the steps below say `julia`.
-2. Clone the repo and enter it:
+3. **The repo.** Clone it. On macOS, if `git` is missing, the first `git` command offers
+   to install it. On Windows, run `winget install Git.Git` first.
 
    ```bash
    git clone https://github.com/mkborregaard/NodivWorkshop.git
    cd NodivWorkshop
    ```
 
-3. From the shared Drive folder `Nodiv/NodivWorkshop/data/`,
-   download `objects.jld2` and `node_analysis.jld2` into a new `data/` folder in the repo.
-4. Put the bird pictures (named like `Carduelis_hornemanni.jpg`) directly in
-   `bow_images/workshop_species/`. They are optional and ignored by git.
-
-   ```
-   NodivWorkshop/
-   ├── explorer.jl
-   ├── data/objects.jld2
-   ├── data/node_analysis.jld2
-   └── bow_images/workshop_species/*.jpg
-   ```
-
-5. Install the packages (once):
+4. **Set up.** This links `data/`, `figures/` and `bow_images/` from the Drive folder into
+   the repo and installs the Julia packages:
 
    ```bash
-   julia --project=. -e "using Pkg; Pkg.instantiate()"
+   julia setup.jl
    ```
 
-6. Run the explorer:
+   If it can't find the Drive folder, pass it: `julia setup.jl "/path/to/Nodiv/NodivWorkshop"`.
+   On Windows, the links need Developer Mode (*Settings → System → For developers*). A
+   message that RCall found no R installation is harmless: R is only needed to rerun
+   `preprocess.jl`.
+5. **Run the explorers.**
 
    ```bash
    julia explorer.jl
    ```
 
-   Two linked windows open, environmental and geographic space; the first time takes a few
-   minutes. Click nodes or branches to show them, hover for labels. The program ends when
-   both windows are closed.
+   The first run takes several minutes: Julia compiles the packages and Drive downloads
+   about 400 MB of data. See [The explorers](#the-explorers) for what you can do in them.
 
-7. Optionally, run the trait explorer:
+## Updating
 
-   ```bash
-   julia traitsexplorer.jl
-   ```
-
-   One window opens with the tree, the SOS maps, the two child clades of the node shown in
-   trait space (PCA axes 2-3, with contours around 95%, 50% and 25% of their trait
-   probability densities), and every node's environmental rms against its geographic rms,
-   coloured by the overlap of those densities (cut at 95%). Click a node in the tree or in
-   the scatter to show it.
-
-To update, `git pull` and repeat step 5.
-
-## Data lives in Google Drive, not in git
-
-The large inputs and the output figures are **not** tracked in this repo. They live in a
-shared Google Drive folder that contains two subfolders:
-
-```
-<Google Drive>/…/Nodiv/NodivWorkshop/
-├── data/      # raw RDS, cleaned inputs, objects.jld2 (tree, birds_e / birds_g)
-│              # and the cached node_analysis.jld2 (res_e / res_g)
-└── figures/   # outputs
-```
-
-In a working clone, `data/` and `figures/` are **symlinks** into that Drive folder
-(both are gitignored). The expensive `node_metrics(...; nsims=…)` run is cached to
-`data/node_analysis.jld2`. Don't recompute it: the script loads it from there.
-
-`preprocess.jl` reads the matched raw data, `data/Bird_data_PCA30.rds` (presences and
-grids for both spaces, three candidate phylogenies, AVONET traits with a morphometric
-PCA, and the environmental PCA's loadings), through RCall, so it needs R with the `sf`
-and `ape` packages. It writes the cleaned CSVs and the pruned tree. The geographic grid
-is a Behrmann equal-area grid, so its cells are placed on an exact regular grid in
-Behrmann coordinates (km).
-
-Of the three phylogenies it uses `McTavish_2025`, whose few polytomies it resolves
-stochastically under a fixed seed before making the tree ultrametric; `docs/data_migration.md`
-records why, and what changed when the analysis moved to this file from the earlier
-`data_birds_matched_simplified.rds`. That earlier file is still read, if present, for the
-raw CHELSA / MODIS / GLWD / elevation layers per geographic cell, which the new one
-keeps only as their PCA.
-
-`create_objects.jl` reads the cleaned inputs, builds the tree and the two assemblages
-(`birds_e`, `birds_g`, with their site covariates, traits and the morphometric PCA axes
-`pca1 … pca9`) and caches them, with the variance on those axes as `trait_pca`, in
-`data/objects.jld2`, which `script.jl`, `traitsscript.jl`, `explorer.jl` and `traitsexplorer.jl`
-load. Re-run it
-whenever `preprocess.jl` has been re-run:
+When the code, the package versions or the image list change, run this from the
+`NodivWorkshop` folder:
 
 ```bash
-julia --project=. create_objects.jl
+git pull
 ```
 
-## Setup on a new machine
+```bash
+julia setup.jl
+```
 
-1. Clone this repo and make sure the shared Drive folder is synced locally (you need
-   access to it).
-2. From the repo, run:
+`setup.jl` remembers the Drive folder and is safe to rerun. If you have edited
+files in the repo yourself, `git pull` may refuse to run. Use `git stash` to set your
+edits aside and `git stash pop` to get them back afterwards. If the packages need a newer
+Julia, run `juliaup update`.
 
-   ```bash
-   julia setup.jl "/path/to/.../Nodiv/NodivWorkshop"
-   ```
+New data and figures in the Drive folder reach you through Drive. You don't need to do
+anything.
 
-   That path is the Drive folder holding `data/` and `figures/`. On macOS you can usually
-   omit it: `setup.jl` auto-discovers the Google Drive folder. You can also set
-   `NODIVWORKSHOP_DATA` instead of passing the argument.
+**For the maintainer.** What each kind of change needs before people can get it:
 
-   `setup.jl` symlinks `data/` and `figures/` into the repo and instantiates the Julia
-   environment.
+| Change | Before `git pull` and `julia setup.jl` pick it up |
+|---|---|
+| Workshop scripts | Commit and push. |
+| Nodiv or NodivMakie | Release the package. In the workshop, run `Pkg.update("Nodiv")`, or for NodivMakie `Pkg.add(url="https://github.com/mkborregaard/NodivMakie.jl", rev="v<new tag>")`. Run the tests, then commit `Project.toml` and `Manifest.toml`. |
+| Species image list | Rerun `crosswalk.jl` in your local `bow_images/`, then copy `crosswalk.csv` and any new images in `320/` to `Nodiv/bow_images` in Drive. Nothing to commit. |
+| `objects.jld2`, `node_analysis.jld2`, figures | Replace the files in the Drive folder. People get them without running anything. |
 
-3. Run the analysis in a REPL (or step through it in VS Code), so the figures can be shown:
+## What's here
 
-   ```bash
-   julia --project=.
-   ```
+| File | What it is |
+|---|---|
+| `explorer.jl` | Opens the two linked node explorers (environmental and geographic space) from a terminal. |
+| `traitsexplorer.jl` | Opens the trait explorer from a terminal. |
+| `script.jl` | The main analysis. Work through it interactively, a line or a block at a time. It is not meant to be run top to bottom. |
+| `traitsscript.jl` | The analysis of the clades' traits: the PCA of the AVONET morphometrics, the trait explorer, and the overlap of the child clades in trait space. Worked through the same way. |
+| `functions.jl`, `traitfunctions.jl` | Finished helper functions for the scripts. |
+| `preprocess.jl` | Cleans the raw data into `data/clean/`. |
+| `create_objects.jl` | Builds the tree and the assemblages from the cleaned data. |
+| `setup.jl` | Setup and updates (see above). |
+| `docs/sos_pattern_grouping_design.md` | The design spec for grouping divergent nodes by how similar their SOS patterns are. |
+| `docs/data_migration.md` | Why the data and the tree are what they are. |
 
-   and then evaluate `script.jl` line by line or block by block (e.g. in VS Code). The
-   `using` block and `include("functions.jl")` at the top come first.
+Helper functions that are still being developed stay in the scripts. Once they are
+finished, general analysis code moves to Nodiv and general plotting code to NodivMakie.
+Only what is specific to this data, such as the traits and the taxon names of nodes,
+stays here.
 
-> On Windows, creating the symlinks needs Developer Mode or an elevated shell.
+## The explorers
 
-## Figures
+`julia explorer.jl` opens one window per space. Each shows the fan tree with the
+divergent nodes marked, the SOS map of the node shown, the richness of its two child
+clades, and an ordination (MDS) of the divergent nodes by how similar their SOS maps are,
+coloured by SOS cluster (grey for nodes on their own). The ordination is a 2-D projection
+for browsing. The clusters come from the full distances.
+
+- Click a node, the branch leading to it, or its point in the ordination to show it.
+- Hover over nodes, branches, ordination points, map cells and species images for labels.
+  A node's label lists the families below it, or the genera for a single family.
+- The two windows are linked: a node picked in one is shown in the other, if it has an
+  SOS there.
+- The program ends when both windows are closed.
+
+`julia traitsexplorer.jl` opens one window with the tree, the SOS maps, and the two child
+clades of the node shown in trait space (PCA axes 2–3, with contours around 95%, 50% and
+25% of their trait densities). It also has a scatter of every node's environmental rms
+against its geographic rms, coloured by the overlap of those densities. Click a node in
+the tree or the scatter to show it.
+
+The species images are Birds of the World illustrations. They are copyrighted, so they
+must never be committed: `bow_images/` is gitignored. Without them the explorers work the
+same, only without the pictures.
+
+## Working through `script.jl`
+
+Open a REPL with `julia --project=.` (or use VS Code) and evaluate the `using` block and
+`include("functions.jl")` at the top first. After that, go through the script in any order.
 
 Every figure is kept in a variable (`richness_g`, `metric_tree_e`, `heat_g`,
-`tree_clusters_e`, …). Evaluate one to show it. Below each figure is a commented-out
-`save("figures/…", fig)` line: uncomment it to write that figure. GLMakie writes raster
-formats; for vector files use `save("figures/name.pdf", fig; backend = CairoMakie)`. The
-(also commented-out) `node_panel_pdf` calls at the end write one multi-page PDF of node
-panels per space, which needs `pdfunite` (poppler, `brew install poppler`).
+`tree_clusters_e`, …). Evaluate the variable to show the figure. Below each figure is a
+commented-out `save("figures/…", fig)` line. Uncomment it to write the figure to Drive.
+GLMakie writes raster formats. For vector files, use
+`save("figures/name.pdf", fig; backend = CairoMakie)`. The `node_panel_pdf` calls at the
+end write one multi-page PDF of node panels per space. They need `pdfunite`
+(`brew install poppler`).
 
-The interactive entry point is the **node explorer**, one per space
-(`explorer_fig_e`, `explorer_fig_g`). In a REPL they open in their own windows. Each shows
-the fan tree with the divergent nodes marked, next to the node's SOS map, the richness of
-its two child clades, and an ordination (MDS) of the divergent nodes by the similarity of
-their SOS maps, coloured by their SOS cluster (the colours of `heat_g` and
-`tree_clusters_g`; grey for nodes on their own). The ordination is a 2-D projection for
-browsing; the clusters come from the full distances.
-- Click a node marker, or the branch leading to a node, to show that node. Clicking a
-  point in the ordination does the same; the node shown has a ring there.
-- Hover over nodes, branches, ordination points and map cells for labels.
-- The two explorers are linked: a node picked in one is shown in the other, if it has
-  an SOS there.
-- `explorer_g.panel.node[] = "Node 17672"` shows a node from code.
+The explorers are `explorer_fig_e` and `explorer_fig_g`. `explorer_g.panel.node[] = "Node 17672"`
+shows a node from code. Set `NODIVWORKSHOP_WINDOWS=false` to keep them from opening
+windows, for example when running headless.
 
-Set `NODIVWORKSHOP_WINDOWS=false` to keep the explorers from opening windows (e.g. when
-running the script headless).
+## The data pipeline
 
-To use just the explorers, without working through `script.jl`, run `explorer.jl` from a
-terminal:
+The expensive step, `node_metrics(...; nsims=…)`, is cached in `data/node_analysis.jld2`
+(`res_e`, `res_g`). The scripts load it from there. Don't recompute it.
+
+1. `preprocess.jl` reads `data/Bird_data_PCA30.rds` through RCall, so it needs R with
+   the `sf` and `ape` packages. The file holds the presences and grids for both spaces,
+   three candidate phylogenies, the AVONET traits with a morphometric PCA, and the
+   loadings of the environmental PCA. The script writes cleaned CSVs and the pruned tree
+   to `data/clean/`. It uses the `McTavish_2025` phylogeny, resolves its few polytomies at
+   random under a fixed seed, and makes it ultrametric. The geographic grid is a Behrmann
+   equal-area grid, with the cells placed exactly on it (in km). The earlier
+   `data_birds_matched_simplified.rds` is still read, if present, for the raw CHELSA /
+   MODIS / GLWD / elevation layers, which the new file keeps only as their PCA.
+2. `create_objects.jl` builds the tree and the two assemblages, `birds_e` and `birds_g`,
+   with their site covariates, traits and the morphometric PCA axes `pca1 … pca9`. It
+   adds `rc1 … rc3`, a Kaiser-normalised varimax rotation of the first three axes. It
+   caches all of these in `data/objects.jld2`, together with the variance on the PCA axes
+   as `trait_pca` and the loadings and variance of the rotated axes as `trait_varimax`.
+   Rerun it whenever `preprocess.jl` has been rerun:
+
+   ```bash
+   julia --project=. create_objects.jl
+   ```
+
+## Developing Nodiv or NodivMakie
+
+The workshop uses released versions: Nodiv from the General registry and NodivMakie from
+GitHub at the tag in `[sources]` in `Project.toml`. To try unreleased changes, dev them
+into the environment on your own machine:
 
 ```bash
-julia explorer.jl
-```
-
-It needs the setup above and the caches `data/objects.jld2` and `data/node_analysis.jld2`,
-which it loads (it never recomputes the analysis). It opens the two linked explorers,
-environmental and geographic, each in its own window, and ends when both windows are
-closed. Getting to the windows takes a few minutes, mostly loading and compiling the
-packages.
-
-Hovering over a node in an explorer shows the families below it (or, for a single family,
-its genera), and hovering over a species image shows the species' family and order.
-
-### Species images (optional, not in the repo)
-
-The explorers can show Birds of the World illustrations: around the tree, one per clade,
-and in the corner of the child-clade maps. The images are copyrighted, so they are **not
-in this repo** and must never be committed. If you have them, put them (or a symlink to
-them) in `bow_images/workshop_species/`, one file per species named by the tree's
-species name (e.g. `Carduelis_hornemanni.jpg`). `bow_images/` carries its own
-`.gitignore` that ignores everything in it. The script uses the images only if that
-folder exists, and runs the same without them.
-
-## Dependencies
-
-Nodiv and the other dependencies come from the General registry. NodivMakie is not
-registered: it is installed from GitHub via `[sources]` in `Project.toml`, and
-`Manifest.toml` pins the commit. To move to the latest NodivMakie, run `Pkg.update("NodivMakie")`.
-
-To test local, unreleased changes to Nodiv or NodivMakie, dev them into this
-environment on your own machine:
-
-```julia
 julia --project=. -e 'using Pkg; Pkg.develop(path="/path/to/Nodiv")'
 ```
 
-and `Pkg.free("Nodiv")` to switch back. (Keep the dev override out of the committed
-`Project.toml`/`Manifest.toml`.)
+Run `Pkg.free("Nodiv")` to switch back. Never commit the dev override in `Project.toml`
+or `Manifest.toml`.
 
-After updating NodivMakie, run the tests of `functions.jl`. The explorers' hover labels
-for the species images use NodivMakie internals, and the tests catch an update that
-breaks them:
+After updating NodivMakie, run the tests. The hover labels on the species images use
+NodivMakie internals, and the tests catch an update that breaks them:
 
 ```bash
 julia --project=. test/runtests.jl

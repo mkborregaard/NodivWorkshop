@@ -1,47 +1,57 @@
 #!/usr/bin/env julia
 #
-# setup.jl — one-time setup for a fresh clone or a new machine.
+# setup.jl — set up a fresh clone, and bring an existing one up to date.
 #
-# The workshop keeps its large inputs and output figures OUT of git, in a shared
-# Google Drive folder that contains `data/` and `figures/`. This script links those
-# two folders into the repo and instantiates the Julia environment. Nodiv and the other
-# dependencies come from the General registry, except NodivMakie (the plotting), which is
-# not registered and is installed from GitHub (see `[sources]` in Project.toml). Nothing
-# here is machine-specific.
+# The large inputs, the output figures and the species images are kept OUT of git, in the
+# shared Google Drive folder `Nodiv/`:
 #
-# The optional species images (bow_images/, private and never in the repo) are not set up
-# here; the script uses them only if bow_images/workshop_species exists. See README.md.
+#     Nodiv/
+#     ├── NodivWorkshop/data/      inputs and caches (objects.jld2, node_analysis.jld2)
+#     ├── NodivWorkshop/figures/   outputs
+#     └── bow_images/              Birds of the World illustrations (private)
+#
+# This script links `data/` and `figures/` into the repo, builds `bow_images/` (a link to
+# the images and one link per workshop species, named by the tree's names, from
+# bow_images/crosswalk.csv), and installs the Julia packages pinned in Manifest.toml. It is
+# safe to re-run, and re-running it is how a clone is updated after a `git pull`.
 #
 # Usage:
-#   julia setup.jl /path/to/NodivWorkshop         # The Drive folder with data/, figures/
-#   NODIVWORKSHOP_DATA=/path/... julia setup.jl    # ...or via an environment variable
-#   julia setup.jl                                 # macOS only: find the Drive folder
+#   julia setup.jl                                 # find the Drive folder (macOS, Windows)
+#   julia setup.jl "/path/to/Nodiv/NodivWorkshop"  # or pass it
+#   NODIVWORKSHOP_DATA=/path/... julia setup.jl    # or set it in the environment
 #
-# The explicit path (argument or env var) works on any OS. Auto-discovery is a macOS
-# convenience only; on Linux/Windows pass the path yourself. On Windows, creating the
-# symlinks needs Developer Mode or an elevated shell.
+# After the first run the folder is remembered through the `data` link. On Windows,
+# creating the links needs Developer Mode (Settings > System > For developers).
 
 using Pkg
 
 const REPO = @__DIR__
+const TAIL = joinpath("Nodiv", "NodivWorkshop")
 
-# Bounded, macOS-only probe of Google Drive for desktop. No deep walk: it only looks
-# where the shared folder actually lives, so it never traverses the whole Drive.
+# Where Google Drive for desktop mounts: ~/Library/CloudStorage/GoogleDrive-* on macOS,
+# a drive letter (G: by default) on Windows.
+function drive_roots()
+    if Sys.isapple()
+        cs = joinpath(homedir(), "Library", "CloudStorage")
+        isdir(cs) || return String[]
+        return filter(d -> startswith(basename(d), "GoogleDrive-"), readdir(cs; join=true))
+    elseif Sys.iswindows()
+        return filter(isdir, ["$(l):\\" for l in 'D':'Z'])
+    end
+    return String[]
+end
+
+# Bounded probe: only where a shared folder added to My Drive can appear, never a deep walk.
 function auto_discover()
-    cs = joinpath(homedir(), "Library", "CloudStorage")
-    isdir(cs) || return nothing
-    tail = joinpath("Nodiv", "NodivWorkshop")
-    for gd in readdir(cs; join=true)
-        startswith(basename(gd), "GoogleDrive-") || continue
-        stb = joinpath(gd, ".shortcut-targets-by-id")  # Shared-drive shortcut targets
-        if isdir(stb)
-            for id in readdir(stb; join=true)
-                cand = joinpath(id, tail)
-                isdir(joinpath(cand, "data")) && return cand
-            end
-        end
-        cand = joinpath(gd, "My Drive", tail)  # Or directly under My Drive
+    for gd in drive_roots()
+        cand = joinpath(gd, "My Drive", TAIL)
         isdir(joinpath(cand, "data")) && return cand
+        stb = joinpath(gd, ".shortcut-targets-by-id")
+        isdir(stb) || continue
+        for id in readdir(stb; join=true)
+            cand = joinpath(id, TAIL)
+            isdir(joinpath(cand, "data")) && return cand
+        end
     end
     return nothing
 end
@@ -49,41 +59,92 @@ end
 function resolve_data_root()
     !isempty(ARGS) && return ARGS[1]
     haskey(ENV, "NODIVWORKSHOP_DATA") && return ENV["NODIVWORKSHOP_DATA"]
+    link = joinpath(REPO, "data")
+    islink(link) && return dirname(readlink(link))  # Set up before
     d = auto_discover()
     d === nothing && error("""
-        Could not locate the shared data folder automatically.
-        Pass it explicitly (the folder that contains `data/` and `figures/`):
-            julia setup.jl "/path/to/.../Nodiv/NodivWorkshop"
-        or set the NODIVWORKSHOP_DATA environment variable to that folder.""")
+        Could not find the shared folder Nodiv/NodivWorkshop in Google Drive.
+        Check that Google Drive for desktop is running and that the shared `Nodiv` folder
+        is added to your My Drive, or pass the folder (the one containing `data/`):
+            julia setup.jl "/path/to/Nodiv/NodivWorkshop\"""")
     return d
 end
 
-function link_dir(sub, root)
-    tgt = joinpath(root, sub)
-    link = joinpath(REPO, sub)
-    # figures/ may not exist yet on a fresh share
-    isdir(tgt) || mkpath(tgt)
-    (islink(link) || ispath(link)) && rm(link; force=true, recursive=false)
-    try
-        symlink(tgt, link)
-        println("  linked  $sub  ->  $tgt")
-    catch err
-        msg =
-            "Could not create a symlink for `$sub`. On Windows this needs Developer " *
-            "Mode or an elevated shell; otherwise create the link manually."
-        @warn msg exception = err
+# Point `link` at `target`, replacing an earlier link but never a real folder.
+function link_dir(target, link)
+    if islink(link)
+        rm(link)
+    elseif ispath(link)
+        println("  kept    $(relpath(link, REPO))  (a real folder, not a link)")
+        return false
     end
+    symlink(target, link; dir_target=true)
+    println("  linked  $(relpath(link, REPO))  ->  $target")
+    return true
+end
+
+function link_or_warn(target, link)
+    try
+        return link_dir(target, link)
+    catch err
+        msg = "Could not link $(relpath(link, REPO)). On Windows this needs Developer Mode."
+        @warn msg exception = err
+        return false
+    end
+end
+
+# A small CSV reader (the packages are not installed yet): rows as Dicts by column name.
+# A quoted field may hold commas.
+function readcsv(path)
+    fields(l) =
+        [strip(m.captures[1], '"') for m in eachmatch(r"(\"[^\"]*\"|[^,]*)(?:,|$)", l)]
+    lines = filter(!isempty, readlines(path))
+    header = fields(first(lines))
+    return [Dict(zip(header, fields(l))) for l in lines[2:end]]
+end
+
+# The species images, as `bow_images/workshop_species/<tree name>.jpg` links into the
+# shared images, built from the shared crosswalk (written by bow_images/crosswalk.jl).
+function link_images(src)
+    dir = joinpath(REPO, "bow_images")
+    if !isdir(src)
+        println("  no species images at $src; the explorers run without them")
+        return nothing
+    end
+    if isdir(joinpath(dir, "320")) && !islink(joinpath(dir, "320"))
+        println("  kept    bow_images  (a local copy of the images)")
+        return nothing
+    end
+    mkpath(dir)
+    link_or_warn(joinpath(src, "320"), joinpath(dir, "320")) || return nothing
+    key(s) = lowercase(replace(strip(s), r"[\s_\-]+" => "_"))  # As in crosswalk.jl
+    manifest = readcsv(joinpath(src, "manifest.csv"))
+    asset = Dict(key(r["sciName"]) => r["assetId"] for r in manifest)
+    species = joinpath(dir, "workshop_species")
+    rm(species; recursive=true, force=true)
+    mkpath(species)
+    n = 0
+    for r in readcsv(joinpath(src, "crosswalk.csv"))
+        id = get(asset, key(r["bow_name"]), nothing)
+        id === nothing && continue
+        name = replace(strip(r["workshop_name"]), r"\s+" => "_") * ".jpg"
+        symlink(joinpath("..", "320", id * ".jpg"), joinpath(species, name))
+        n += 1
+    end
+    println("  linked  bow_images/workshop_species  ($n species images)")
     return nothing
 end
 
-root = resolve_data_root()
-isdir(joinpath(root, "data")) || error("No `data/` under $root — is that the right folder?")
-println("Data folder: $root")
+root = rstrip(normpath(resolve_data_root()), ['/', '\\'])
+isdir(joinpath(root, "data")) || error("No `data/` in $root: is that the right folder?")
+println("Shared folder: $root")
 for sub in ("data", "figures")
-    link_dir(sub, root)
+    isdir(joinpath(root, sub)) || mkpath(joinpath(root, sub))
+    link_or_warn(joinpath(root, sub), joinpath(REPO, sub))
 end
+link_images(joinpath(dirname(root), "bow_images"))
 
-println("Instantiating the Julia environment (General registry; NodivMakie from GitHub)…")
-Pkg.activate(REPO)
+println("Installing the Julia packages pinned in Manifest.toml…")
+Pkg.activate(REPO; io=devnull)
 Pkg.instantiate()
-println("Done. Open a REPL with  julia --project=.  and run  include(\"script.jl\")")
+println("Done. Open the explorers with  julia explorer.jl")

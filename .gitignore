@@ -1,8 +1,9 @@
-# data files and output figures are kept local (in Google Drive), not pushed.
-# No trailing slash: these are symlinks to the Drive folder here, and a "dir/"
+# Data, output figures and the (copyrighted) species images live in Google Drive, not
+# in git; setup.jl links them in. No trailing slash: these are symlinks, and a "dir/"
 # pattern would not match a symlink (git treats it as a file).
 data
 figures
+bow_images
 
 # editor / OS / R cruft
 .DS_Store
