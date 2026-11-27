@@ -77,6 +77,25 @@ end
         @test taxa_text(asm, tree, "n3") == "Ord2\nFam2\nCc"
     end
 
+    @testset "split_taxa_text" begin
+        blue, red = clade_colors(:RdYlBu)
+        # The two child clades, coloured as the tree's branches are. `getchildren` gives
+        # them in the tree's own order, here the reverse of the Newick string: n2 before n1.
+        @test split_taxa_text(asm, tree, "n2") == rich(
+            rich("Ord2\nFam2\nCc"; color=blue), "\n", rich("Ord2\nFam2\nBb"; color=red)
+        )
+        @test string(split_taxa_text(asm, tree, "root")) ==
+            "Ord2\nFam2\nBb, Cc\nOrd1\nFam1\nAa"
+        @test split_taxa_text(asm, tree, "n3"; colors=(:cyan, :magenta)) == rich(
+            rich("Ord2\nFam2\nCc"; color=:cyan), "\n", rich("Ord2\nFam2\nCc"; color=:magenta)
+        )
+        # the other kwargs reach taxa_text
+        @test string(split_taxa_text(asm, tree, "root"; ngenera=1)) ==
+            "Ord2\nFam2\nBb\n… and 1 more\nOrd1\nFam1\nAa"
+        # a leaf has no children, so it gets its own taxa, uncoloured
+        @test split_taxa_text(asm, tree, "Cc_y") == rich("Ord2\nFam2\nCc")
+    end
+
     @testset "node_explorer hover labels" begin
         fig, ex = node_explorer(asm, tree, res; nodes=:all, images=imagedir)
         @test ex.ordination !== nothing
@@ -86,8 +105,9 @@ end
 
         taxa_hover!(ex, asm, tree)
         taxa_image_hover!(ex, asm)
-        @test ex.treeplot.hoverlabel[]("n2") == before * "\nOrd2\nFam2\nBb, Cc"
-        @test endswith(ex.treeplot.hoverlabel[]("root"), "\n2 families:\nFam1, Fam2")
+        @test string(ex.treeplot.hoverlabel[]("n2")) ==
+            before * "\nOrd2\nFam2\nCc\nOrd2\nFam2\nBb"
+        @test endswith(string(ex.treeplot.hoverlabel[]("root")), "\nOrd1\nFam1\nAa")
         @test ex.ordination.hoverlabel[]("root") == ex.treeplot.hoverlabel[]("root")
 
         # tree images: the family and order under the species name, the rest kept
@@ -138,7 +158,7 @@ end
         )
         taxa_hover!(et, asm, tree)
         taxa_image_hover!(et, asm)
-        @test endswith(et.treeplot.hoverlabel[]("n3"), "\nFam2\nCc")
+        @test endswith(string(et.treeplot.hoverlabel[]("n3")), "\nFam2\nCc")
         labels = image_labels(et.images.plots)
         @test !isempty(labels) && all(l -> occursin(r"\nFam\d, Ord\d", l), labels)
     end
