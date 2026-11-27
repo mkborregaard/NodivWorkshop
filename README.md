@@ -161,10 +161,8 @@ The expensive step, `node_metrics(...; nsims=…)`, is cached in `data/node_anal
    MODIS / GLWD / elevation layers, which the new file keeps only as their PCA.
 2. `create_objects.jl` builds the tree and the two assemblages, `birds_e` and `birds_g`,
    with their site covariates, traits and the morphometric PCA axes `pca1 … pca9`. It
-   adds `rc1 … rc3`, a Kaiser-normalised varimax rotation of the first three axes. It
-   caches all of these in `data/objects.jld2`, together with the variance on the PCA axes
-   as `trait_pca` and the loadings and variance of the rotated axes as `trait_varimax`.
-   Rerun it whenever `preprocess.jl` has been rerun:
+   caches them in `data/objects.jld2`, together with the variance on those axes as
+   `trait_pca`. Rerun it whenever `preprocess.jl` has been rerun:
 
    ```bash
    julia --project=. create_objects.jl
