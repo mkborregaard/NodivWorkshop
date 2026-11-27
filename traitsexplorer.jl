@@ -1,6 +1,7 @@
 # Open the trait explorer from the cached node analysis, in its own window: the tree, the
 # SOS of the node shown in geographic and environmental space, its two child clades in trait
-# space (PCA axes 3-4 of the AVONET morphometrics: beak shape and locomotor shape) and in
+# space (by default PCA axes 3-4 of the AVONET morphometrics, beak shape and locomotor
+# shape; set by TRAIT_PCS in traitfunctions.jl) and in
 # environmental space, the latter with the overlap of their kernel densities. The nodes of
 # the tree are coloured by which of
 # geography and environment (rms > 1.5) and traits (TPD overlap < 0.2) their child clades
@@ -37,7 +38,7 @@ res_e, res_g = load("data/node_analysis.jld2", "res_e", "res_g")
 # The same settings as the trait explorer in traitsscript.jl. The PCA axes are already on
 # the assemblages, joined on in create_objects.jl.
 pca_explained = trait_pca.proportion
-const TRAIT_PCS = (3, 4)
+# The two PCA axes of trait space are TRAIT_PCS, set in traitfunctions.jl
 overlap = trait_overlaps(
     tree,
     trait_points(birds_g, (Symbol("pca$i") for i in TRAIT_PCS)...),

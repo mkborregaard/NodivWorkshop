@@ -8,6 +8,21 @@
 # onto the assemblages, and the scripts take the variance per axis from the `trait_pca`
 # table in data/objects.jld2. See docs/data_migration.md.
 
+### ---- The trait space ---- ###
+
+# The two PCA axes of trait space, used by both traitsscript.jl and traitsexplorer.jl for
+# the trait overlap (TPD) and the trait panel of the explorer. Of the supplied PCA of the
+# log, standardised morphometrics:
+#   pca1  overall size (r = 0.999 with the mean of the log traits)
+#   pca2  beak size relative to the body; once size is removed this is the same axis as
+#         limb size relative to the body
+#   pca3  beak shape: long and slender vs short and deep
+#   pca4  locomotor shape: long tarsus vs long tail
+# (3, 4) is beak shape against locomotor shape; (2, 3) is relative beak size against beak
+# shape. Both pairs are free of size.
+const TRAIT_PCS = (3, 4)
+# const TRAIT_PCS = (2, 3)
+
 ### ---- Trait probability densities and their overlap ---- ###
 
 # Species => point in trait space, from the columns `x` and `y` of an assemblage's traits
