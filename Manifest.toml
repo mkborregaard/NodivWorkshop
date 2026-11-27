@@ -2,7 +2,7 @@
 
 julia_version = "1.13.4"
 manifest_format = "2.1"
-project_hash = "aeb9afe97d7207732968e6104f3dfbaebf966aee"
+project_hash = "1ff4d5b302f16fd75c58bb48a34e2ffbd84d8d47"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1341,12 +1341,12 @@ uuid = "6a6d1b09-ff88-4671-a19a-d516f2482c79"
 version = "0.3.0"
 
 [[deps.NodivMakie]]
-deps = ["ColorTypes", "EcoBase", "FileIO", "GridLayoutBase", "ImageIO", "Makie", "Nodiv", "Phylo", "SpatialEcology"]
-git-tree-sha1 = "478ac81c55bfa84087d7b56801c1892367664020"
-repo-rev = "v0.4.0"
+deps = ["ColorTypes", "Colors", "EcoBase", "FileIO", "GridLayoutBase", "ImageIO", "Makie", "Nodiv", "Phylo", "SpatialEcology"]
+git-tree-sha1 = "32cc5b541c9535aa881598eab4f2424e686b4fc9"
+repo-rev = "v0.4.1"
 repo-url = "https://github.com/mkborregaard/NodivMakie.jl"
 uuid = "6e5bb3f3-9e99-4721-b096-016fa2d2f487"
-version = "0.4.0"
+version = "0.4.1"
 
 [[deps.Observables]]
 git-tree-sha1 = "7438a59546cf62428fc9d1bc94729146d37a7225"
