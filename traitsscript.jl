@@ -55,8 +55,12 @@ env_overlap_values = [env_overlap[n] for n in geo_nodes]
 
 ### ---- Trait overlap (TPD) and the trait explorer ---- ###
 
-# The two PCA axes of trait space
-const TRAIT_PCS = (2, 3)
+# The two PCA axes of trait space: beak shape and locomotor shape. pca1 is overall size
+# (r = 0.999 with the mean of the log traits); pca2 is beak size relative to the body,
+# which is the same axis as limb size relative to the body once size is removed. pca3 is
+# beak shape (long and slender vs short and deep) and pca4 locomotor shape (long tarsus vs
+# long tail), so the pair is free of size and separates beak from locomotion.
+const TRAIT_PCS = (3, 4)
 trait_pts = trait_points(birds_g, (Symbol("pca$i") for i in TRAIT_PCS)...)
 trait_overlap = trait_overlaps(tree, trait_pts, allnodes)
 

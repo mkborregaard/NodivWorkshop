@@ -1,7 +1,8 @@
 # Open the trait explorer from the cached node analysis, in its own window: the tree, the
 # SOS of the node shown in geographic and environmental space, its two child clades in trait
-# space (PCA axes 2-3 of the AVONET morphometrics) and in environmental space, the latter
-# with the overlap of their kernel densities. The nodes of the tree are coloured by which of
+# space (PCA axes 3-4 of the AVONET morphometrics: beak shape and locomotor shape) and in
+# environmental space, the latter with the overlap of their kernel densities. The nodes of
+# the tree are coloured by which of
 # geography and environment (rms > 1.5) and traits (TPD overlap < 0.2) their child clades
 # diverge in; nodes that diverge in none of them are not marked. The script ends when the
 # window is closed. Needs the same setup and caches as explorer.jl.
@@ -36,7 +37,12 @@ res_e, res_g = load("data/node_analysis.jld2", "res_e", "res_g")
 # The same settings as the trait explorer in traitsscript.jl. The PCA axes are already on
 # the assemblages, joined on in create_objects.jl.
 pca_explained = trait_pca.proportion
-overlap = trait_overlaps(tree, trait_points(birds_g, :pca2, :pca3), collect(keys(res_e.rms)))
+const TRAIT_PCS = (3, 4)
+overlap = trait_overlaps(
+    tree,
+    trait_points(birds_g, (Symbol("pca$i") for i in TRAIT_PCS)...),
+    collect(keys(res_e.rms)),
+)
 env_overlap = site_overlaps(tree, birds_e, collect(keys(res_g.rms)))
 divergence = divergence_classes(
     res_g.rms, res_e.rms, overlap; threshold=1.5, overlap_threshold=0.2
@@ -51,7 +57,7 @@ fig, explorer_tree = trait_explorer(
     pca_explained,
     overlap;
     metric=:rms,
-    pcs=(2, 3),
+    pcs=TRAIT_PCS,
     env_overlap,
     classes=DIVERGENCE_CLASSES,
     classlabel="divergent in (rms > 1.5, trait overlap < 0.2)",

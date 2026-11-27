@@ -118,7 +118,8 @@ for browsing. The clusters come from the full distances.
 - The program ends when both windows are closed.
 
 `julia traitsexplorer.jl` opens one window with the tree, the SOS maps, and the two child
-clades of the node shown in trait space (PCA axes 2–3, with contours around 95%, 50% and
+clades of the node shown in trait space (PCA axes 3–4, beak shape and locomotor shape,
+with contours around 95%, 50% and
 25% of their trait densities). It also has a scatter of every node's environmental rms
 against its geographic rms, coloured by the overlap of those densities. Click a node in
 the tree or the scatter to show it.
