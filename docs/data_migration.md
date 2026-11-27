@@ -159,6 +159,43 @@ older e20fdac, still expected none. The behaviour matches the function's docstri
 the tests were brought up to date rather than the behaviour reverted, and a case for the
 `norders` cut-off was added. The suite passes, 38 tests.
 
+## The species images
+
+`bow_images/` is private and git-ignores its own contents, so it was outside the
+migration — but the new tree invalidated its name crosswalk, and the folder had gone
+missing from the repo. It was restored from `My Drive/Nodiv/bow_images`: 11,055 JPEGs in
+`320/`, named by Birds of the World asset id, plus `manifest.csv` and `crosswalk.jl`.
+`workshop_species/`, the folder the scripts actually look for, is not stored anywhere —
+`crosswalk.jl` derives it as symlinks into `320/` named by the tree's species.
+
+Rebuilding it needed a fix first: `crosswalk.jl`'s own Newick reader stripped whitespace
+from each label but not quotes, and Phylo.jl's writer quotes every label, so each name
+arrived as `"Struthio_camelus"` and nothing matched. `readlabel` now strips both. The
+pre-migration `tree.nwk` is quoted too, so this was never a regression; the September run
+must have read a differently written tree.
+
+Rebuilt against `McTavish_2025`:
+
+| | |
+|---|---|
+| exact name match | 9,553 |
+| matched via context | 424 |
+| matched via genus | 4 |
+| linked | 9,981 of 10,354 (96.4%) |
+| no BOW match | 373 |
+
+Reusing the Jetz-era crosswalk would have matched only 7,381, since McTavish and Birds of
+the World are both eBird/Clements-based while BirdTree is not — the fuzzy matching now
+only has to cover the residue. The 373 are species Birds of the World lumps differently,
+concentrated in Thraupidae, Columbidae and Picidae. A further 8 links point at assets that
+failed in the original download (`failed_assets.txt`), so 9,973 species have an image.
+
+Verified by rebuilding the exact-match set independently from `manifest.csv` and
+comparing: all 9,553 present, no asset-id mismatch, no link naming a species absent from
+the tree. Every copied file matches Drive byte for byte; one arrived empty and was
+re-copied. Drive keeps its earlier outputs as `crosswalk_jetz2012.csv` and
+`crosswalk_review_jetz2012.txt`.
+
 ## Steps taken
 
 1. **Decide**: tree (McTavish recommended); whether to carry the 41 raw geo columns over.
